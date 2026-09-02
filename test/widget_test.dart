@@ -43,7 +43,8 @@ void main() {
     // Tap "Сервисы"
     await tester.tap(find.text('Сервисы'));
     await tester.pumpAndSettle();
-    expect(find.text('ЗДЕСЬ БУДУТ СЕРВИСЫ'), findsOneWidget);
+    expect(find.text('Транспортные карты'), findsOneWidget);
+    expect(find.text('Мобильное приложение'), findsOneWidget);
 
     // Tap "Профиль"
     await tester.tap(find.text('Профиль'));
