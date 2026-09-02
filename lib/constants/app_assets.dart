@@ -27,8 +27,14 @@ abstract class AppAssets {
   static const String icOk = 'assets/icons/ic_ok.png';
   static const String icPlus = 'assets/icons/ic_plus.png';
 
-  // App Icon
-  static const String appIcon = 'assets/icon/icon.png';
+  // Bottom Navigation Icons
+  static const String icRootbmNews = 'assets/icons/ic_rootbm_news.png';
+  static const String icRootbmMap = 'assets/icons/ic_rootbm_map.png';
+  static const String icRootbmActionQr = 'assets/icons/ic_rootbm_action_qr.png';
+  static const String icRootbmActionBeacon = 'assets/icons/ic_rootbm_action_beacon.png';
+  static const String icRootbmServices = 'assets/icons/ic_rootbm_services.png';
+  static const String icRootbmProfile = 'assets/icons/ic_rootbm_profile.png';
+  static const String icRootbmHistory = 'assets/icons/ic_rootbm_history.png';
 
   // Data
   static const String tariffsJson = 'assets/data/tariffs.json';

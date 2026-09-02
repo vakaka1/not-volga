@@ -43,4 +43,11 @@ abstract class AppColors {
 
   /// Чёрный цвет (#000000)
   static const Color black = Color(0xFF000000);
+
+  /// Нижняя панель навигации
+  static const Color rootbmBackground = Color(0xFFFFFFFF);
+  static const Color rootbmElementIcon = Color(0xFF9199A2);
+  static const Color rootbmElementSelected = Color(0xFF3B5CFE);
+  static const Color rootbmElementTitle = Color(0xFF000000);
+  static const Color rootbmDivider = Color(0xFFE5E7EB);
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_assets.dart';
 import '../theme/app_colors.dart';
-import 'home_stub_screen.dart';
+import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -41,14 +41,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Задержка и плавный переход на страницу-заглушку
+    // Задержка и плавный переход на главный экран с нижней панелью навигации
     Future.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             transitionDuration: const Duration(milliseconds: 400),
             pageBuilder: (context, animation, secondaryAnimation) =>
-                const HomeStubScreen(),
+                const MainScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,
