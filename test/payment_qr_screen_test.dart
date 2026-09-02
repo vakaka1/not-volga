@@ -168,7 +168,7 @@ void main() {
       expect(paymentSuccessCalled, isTrue);
     });
 
-    testWidgets('PaymentConfirmationSheet prompts top-up when balance is insufficient',
+    testWidgets('PaymentConfirmationSheet shows error dialog when balance is insufficient',
         (WidgetTester tester) async {
       final transport = ScannedTransportInfo.fromRawData('route=15');
       await BalanceService.instance.setBalance(20); // Not enough for 40 ₽ fare
@@ -195,9 +195,24 @@ void main() {
       await tester.tap(find.text('Open Sheet'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Недостаточно средств. Пополните баланс.'), findsOneWidget);
-      expect(find.text('Пополнить баланс'), findsOneWidget);
       expect(find.text('20 ₽'), findsOneWidget);
+      expect(find.text('Оплатить 40 ₽'), findsOneWidget);
+
+      // Attempt payment with insufficient funds
+      await tester.tap(find.text('Оплатить 40 ₽'));
+      await tester.pumpAndSettle();
+
+      // Error dialog matching res/error.webp is displayed
+      expect(find.text('Ошибка'), findsOneWidget);
+      expect(find.text('Недостаточно средств'), findsOneWidget);
+      expect(find.text('OK'), findsOneWidget);
+
+      // Tap OK to dismiss error dialog
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ошибка'), findsNothing);
+      expect(find.text('Недостаточно средств'), findsNothing);
     });
 
     testWidgets('PaymentSuccessDialog displays digital ticket correctly',

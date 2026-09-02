@@ -36,73 +36,65 @@ class _ServicesScreenState extends State<ServicesScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return Dialog(
+        return AlertDialog(
           backgroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.0),
+            borderRadius: BorderRadius.circular(4.0),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 28.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Green checkmark from APK
-                Image.asset(
-                  AppAssets.icOk,
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.contain,
+          contentPadding: const EdgeInsets.fromLTRB(24.0, 24.0, 24.0, 0.0),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                AppAssets.icOk,
+                width: 56,
+                height: 56,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Баланс успешно пополнен!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'NotoSans',
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Баланс успешно пополнен!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'NotoSans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Сумма пополнения: $amount ₽',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'NotoSans',
+                  fontSize: 15,
+                  color: Color(0xFF6B7280),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Сумма пополнения: $amount ₽',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: 'NotoSans',
-                    fontSize: 15,
-                    color: Color(0xFF6B7280),
-                  ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF165AF0),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'OK',
+                style: TextStyle(
+                  fontFamily: 'NotoSans',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B5CFE),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'Ок',
-                      style: TextStyle(
-                        fontFamily: 'NotoSans',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         );
       },
     );

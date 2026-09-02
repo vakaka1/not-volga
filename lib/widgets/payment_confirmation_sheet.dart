@@ -338,104 +338,51 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
               ),
               const SizedBox(height: 20),
 
-              // Pay Button / Top-up Button
-              if (hasSufficientBalance) ...[
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isPaying ? null : () => _processPayment(currentBalance, fare),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B5CFE),
-                      foregroundColor: AppColors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+              // Pay Button
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isPaying ? null : () => _handlePay(currentBalance, fare),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B5CFE),
+                    foregroundColor: AppColors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: _isPaying
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          )
-                        : Text(
-                            'Оплатить $fare ₽',
-                            style: const TextStyle(
-                              fontFamily: 'NotoSans',
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                   ),
-                ),
-              ] else ...[
-                Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 18, color: Color(0xFFDC2626)),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Недостаточно средств. Пополните баланс.',
-                              style: TextStyle(
-                                fontFamily: 'NotoSans',
-                                fontSize: 13,
-                                color: Color(0xFFDC2626),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                  child: _isPaying
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 52,
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const ReplenishScreen(),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B5CFE),
-                          foregroundColor: AppColors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'Пополнить баланс',
-                          style: TextStyle(
+                        )
+                      : Text(
+                          'Оплатить $fare ₽',
+                          style: const TextStyle(
                             fontFamily: 'NotoSans',
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                    ),
-                  ],
                 ),
-              ],
+              ),
             ],
           ),
         );
       },
     );
+  }
+
+  void _handlePay(int currentBalance, int fare) {
+    if (currentBalance < fare) {
+      InsufficientFundsDialog.show(context);
+      return;
+    }
+    _processPayment(currentBalance, fare);
   }
 
   Future<void> _processPayment(int currentBalance, int fare) async {
@@ -591,3 +538,64 @@ class PaymentSuccessDialog extends StatelessWidget {
     );
   }
 }
+
+/// Dialog shown when attempting payment with insufficient balance.
+/// Reproduces res/error.webp with exact title, message, shape (BorderRadius.circular(4.0)), and flat "OK" button.
+class InsufficientFundsDialog extends StatelessWidget {
+  const InsufficientFundsDialog({super.key});
+
+  static Future<void> show(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const InsufficientFundsDialog(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4.0),
+      ),
+      title: const Text(
+        'Ошибка',
+        style: TextStyle(
+          fontFamily: 'NotoSans',
+          fontSize: 19,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      content: const Text(
+        'Недостаточно средств',
+        style: TextStyle(
+          fontFamily: 'NotoSans',
+          fontSize: 15,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF165AF0),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            'OK',
+            style: TextStyle(
+              fontFamily: 'NotoSans',
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+

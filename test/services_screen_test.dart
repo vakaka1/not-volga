@@ -94,10 +94,10 @@ void main() {
       expect(find.byType(ServicesScreen), findsOneWidget);
       expect(find.text('Баланс успешно пополнен!'), findsOneWidget);
       expect(find.text('Сумма пополнения: 160 ₽'), findsOneWidget);
-      expect(find.text('Ок'), findsOneWidget);
+      expect(find.text('OK'), findsOneWidget);
 
       // Dismiss success dialog
-      await tester.tap(find.text('Ок'));
+      await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
 
       // Dialog is gone, updated balance 160 ₽ is displayed
