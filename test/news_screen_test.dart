@@ -33,7 +33,7 @@ void main() {
       ),
     ];
 
-    testWidgets('Displays header "События" and full-width plain news list',
+    testWidgets('Displays header "События" and pressable news list buttons',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -49,7 +49,7 @@ void main() {
       // No refresh icon button
       expect(find.byIcon(Icons.refresh), findsNothing);
 
-      // Bold Title, regular text, grey date are present
+      // News items are present
       expect(
         find.text('Экономия почти 850 тысяч рублей по пересадочному тарифу'),
         findsOneWidget,
@@ -67,6 +67,13 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('29 августа 2026'), findsOneWidget);
+
+      // Verify that items are pressable InkWell buttons
+      expect(find.byType(InkWell), findsNWidgets(2));
+
+      // Tap on first item to test pressing
+      await tester.tap(find.text('Экономия почти 850 тысяч рублей по пересадочному тарифу'));
+      await tester.pumpAndSettle();
     });
   });
 }
