@@ -5,7 +5,9 @@ import 'package:not_volga/screens/splash_screen.dart';
 import 'package:not_volga/widgets/volga_bottom_nav_bar.dart';
 
 void main() {
-  testWidgets('Splash screen loads and transitions to MainScreen with Map default tab', (WidgetTester tester) async {
+  testWidgets(
+      'Splash screen loads and transitions to MainScreen with Map default tab and News navigation',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const NotVolgaApp());
 
     // Splash screen is displayed first
@@ -31,7 +33,7 @@ void main() {
     // Tap "Новости"
     await tester.tap(find.text('Новости'));
     await tester.pumpAndSettle();
-    expect(find.text('ЗДЕСЬ БУДУТ НОВОСТИ'), findsOneWidget);
+    expect(find.text('События'), findsOneWidget);
 
     // Tap "Оплата"
     await tester.tap(find.text('Оплата'));

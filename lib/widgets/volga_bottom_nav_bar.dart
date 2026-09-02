@@ -60,16 +60,16 @@ class VolgaBottomNavBar extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Positioned(
-                            top: -14,
+                            top: -18,
                             child: Image.asset(
                               item.icon,
-                              width: 52,
-                              height: 52,
+                              width: 60,
+                              height: 60,
                               fit: BoxFit.contain,
                             ),
                           ),
                           Positioned(
-                            bottom: 6,
+                            bottom: 5,
                             child: Text(
                               item.title,
                               style: TextStyle(
