@@ -20,8 +20,10 @@ abstract class AppAssets {
   static const String icCardMaster = 'assets/icons/ic_card_master.png';
   static const String icMenu = 'assets/icons/ic_menu.png';
   static const String icHistory = 'assets/icons/ic_history.png';
+  static const String icSupport = 'assets/icons/ic_support.png';
   static const String icSettings = 'assets/icons/ic_settings.png';
   static const String icBack = 'assets/icons/ic_back.png';
+  static const String icToolbarBack = 'assets/icons/bms_ic_toolbar_back_black.png';
   static const String icNext = 'assets/icons/ic_next.png';
   static const String icClose = 'assets/icons/ic_close_black.png';
   static const String icOk = 'assets/icons/ic_ok.png';

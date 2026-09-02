@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../widgets/volga_bottom_nav_bar.dart';
 import 'news_screen.dart';
+import 'profile_screen.dart';
 import 'tab_placeholder_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class _MainScreenState extends State<MainScreen> {
     TabPlaceholderScreen(title: 'ЗДЕСЬ БУДЕТ КАРТА'),
     TabPlaceholderScreen(title: 'ЗДЕСЬ БУДЕТ ОПЛАТА'),
     TabPlaceholderScreen(title: 'ЗДЕСЬ БУДУТ СЕРВИСЫ'),
-    TabPlaceholderScreen(title: 'ЗДЕСЬ БУДЕТ ПРОФИЛЬ'),
+    ProfileScreen(),
   ];
 
   @override

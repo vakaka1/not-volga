@@ -48,7 +48,9 @@ void main() {
     // Tap "Профиль"
     await tester.tap(find.text('Профиль'));
     await tester.pumpAndSettle();
-    expect(find.text('ЗДЕСЬ БУДЕТ ПРОФИЛЬ'), findsOneWidget);
+    expect(find.text('История\nпоездок'), findsOneWidget);
+    expect(find.text('Поддержка'), findsOneWidget);
+    expect(find.text('Настройки'), findsOneWidget);
 
     // Tap "Карта" back
     await tester.tap(find.text('Карта'));
