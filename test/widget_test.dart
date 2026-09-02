@@ -38,7 +38,8 @@ void main() {
     // Tap "Оплата"
     await tester.tap(find.text('Оплата'));
     await tester.pumpAndSettle();
-    expect(find.text('ЗДЕСЬ БУДЕТ ОПЛАТА'), findsOneWidget);
+    expect(find.text('Сканировать QR-код'), findsOneWidget);
+    expect(find.text('Наведите камеру на QR-код для оплаты'), findsOneWidget);
 
     // Tap "Сервисы"
     await tester.tap(find.text('Сервисы'));

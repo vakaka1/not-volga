@@ -50,4 +50,10 @@ abstract class AppColors {
   static const Color rootbmElementSelected = Color(0xFF3B5CFE);
   static const Color rootbmElementTitle = Color(0xFF000000);
   static const Color rootbmDivider = Color(0xFFE5E7EB);
+
+  /// QR Сканер
+  static const Color qrContourYellow = Color(0xFFFFD300);
+  static const Color qrOverlayBackground = Color(0x99000000);
+  static const Color flashActive = Color(0xFFFFD300);
 }
+
