@@ -1,0 +1,557 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "updated_at": "2026-09-02T07:02:56.444524+00:00",
+    "source": "https://tvercard.ru/tarify",
+    "currency": "RUB",
+    "total_regions": 6
+  },
+  "regions": [
+    {
+      "id": "tver",
+      "name": "Тверь и Калининский район",
+      "location_id": 1,
+      "city": {
+        "single_ride": {
+          "cashless": 40.0,
+          "cash": 45.0,
+          "app_qr": 40.0
+        },
+        "transfer": {
+          "duration_minutes": 60,
+          "first_ride_price": 40.0,
+          "transfer_price": 20.0,
+          "total_price": 60.0,
+          "description": "разовая поездка + пересадка в городской зоне"
+        },
+        "school_pass": {
+          "price": 525.0,
+          "valid_period": "01.09.25 - 04.05.26",
+          "period_type": "calendar_month",
+          "description": "Действует в черте города для школьников"
+        },
+        "social_pass": {
+          "price": 302.0,
+          "period_type": "calendar_month",
+          "description": "Социальная карта жителя Тверской области"
+        },
+        "trips_passes": [
+          {
+            "trips": 5,
+            "duration_days": 30,
+            "price": 190.0,
+            "price_per_trip": 38.0
+          },
+          {
+            "trips": 20,
+            "duration_days": 60,
+            "price": 740.0,
+            "price_per_trip": 37.0
+          },
+          {
+            "trips": 40,
+            "duration_days": 90,
+            "price": 1440.0,
+            "price_per_trip": 36.0
+          },
+          {
+            "trips": 60,
+            "duration_days": 120,
+            "price": 2100.0,
+            "price_per_trip": 35.0
+          }
+        ],
+        "days_passes": [
+          {
+            "days": 1,
+            "price": 140.0
+          },
+          {
+            "days": 3,
+            "price": 360.0
+          },
+          {
+            "days": 7,
+            "price": 600.0
+          },
+          {
+            "days": 15,
+            "price": 1150.0
+          },
+          {
+            "days": 30,
+            "price": 1800.0
+          },
+          {
+            "days": 90,
+            "price": 5000.0
+          },
+          {
+            "days": 365,
+            "price": 18000.0
+          }
+        ]
+      },
+      "suburban": {
+        "district_name": "Калининский район",
+        "per_km_cashless": 4.75,
+        "per_km_cash": 4.85
+      }
+    },
+    {
+      "id": "rzhev",
+      "name": "Ржев",
+      "location_id": 2,
+      "city": {
+        "single_ride": {
+          "cashless": 40.0,
+          "cash": 45.0,
+          "app_qr": 40.0
+        },
+        "transfer": {
+          "duration_minutes": 30,
+          "first_ride_price": 40.0,
+          "transfer_price": 20.0,
+          "total_price": 60.0,
+          "description": "разовая поездка + пересадка в городской зоне"
+        },
+        "school_pass": {
+          "price": 525.0,
+          "valid_period": "01.09.25 - 04.05.26",
+          "period_type": "calendar_month",
+          "description": "Действует в черте города для школьников"
+        },
+        "social_pass": {
+          "price": 302.0,
+          "period_type": "calendar_month",
+          "description": "Социальная карта жителя Тверской области"
+        },
+        "trips_passes": [
+          {
+            "trips": 5,
+            "duration_days": 30,
+            "price": 190.0,
+            "price_per_trip": 38.0
+          },
+          {
+            "trips": 20,
+            "duration_days": 60,
+            "price": 740.0,
+            "price_per_trip": 37.0
+          },
+          {
+            "trips": 40,
+            "duration_days": 90,
+            "price": 1440.0,
+            "price_per_trip": 36.0
+          },
+          {
+            "trips": 60,
+            "duration_days": 120,
+            "price": 2100.0,
+            "price_per_trip": 35.0
+          }
+        ],
+        "days_passes": [
+          {
+            "days": 1,
+            "price": 140.0
+          },
+          {
+            "days": 3,
+            "price": 360.0
+          },
+          {
+            "days": 7,
+            "price": 600.0
+          },
+          {
+            "days": 15,
+            "price": 1150.0
+          },
+          {
+            "days": 30,
+            "price": 1800.0
+          },
+          {
+            "days": 90,
+            "price": 5000.0
+          },
+          {
+            "days": 365,
+            "price": 18000.0
+          }
+        ]
+      },
+      "suburban": {
+        "district_name": "Ржевский район",
+        "per_km_cashless": 4.75,
+        "per_km_cash": 4.85
+      }
+    },
+    {
+      "id": "staritsa",
+      "name": "Старица",
+      "location_id": 6,
+      "city": {
+        "single_ride": {
+          "cashless": 40.0,
+          "cash": 45.0,
+          "app_qr": 40.0
+        },
+        "transfer": {
+          "duration_minutes": 30,
+          "first_ride_price": 40.0,
+          "transfer_price": 20.0,
+          "total_price": 60.0,
+          "description": "разовая поездка + пересадка в городской зоне"
+        },
+        "school_pass": {
+          "price": 525.0,
+          "valid_period": "01.09.25 - 04.05.26",
+          "period_type": "calendar_month",
+          "description": "Действует в черте города для школьников"
+        },
+        "social_pass": {
+          "price": 302.0,
+          "period_type": "calendar_month",
+          "description": "Социальная карта жителя Тверской области"
+        },
+        "trips_passes": [
+          {
+            "trips": 5,
+            "duration_days": 30,
+            "price": 190.0,
+            "price_per_trip": 38.0
+          },
+          {
+            "trips": 20,
+            "duration_days": 60,
+            "price": 740.0,
+            "price_per_trip": 37.0
+          },
+          {
+            "trips": 40,
+            "duration_days": 90,
+            "price": 1440.0,
+            "price_per_trip": 36.0
+          },
+          {
+            "trips": 60,
+            "duration_days": 120,
+            "price": 2100.0,
+            "price_per_trip": 35.0
+          }
+        ],
+        "days_passes": [
+          {
+            "days": 1,
+            "price": 140.0
+          },
+          {
+            "days": 3,
+            "price": 360.0
+          },
+          {
+            "days": 7,
+            "price": 600.0
+          },
+          {
+            "days": 15,
+            "price": 1150.0
+          },
+          {
+            "days": 30,
+            "price": 1800.0
+          },
+          {
+            "days": 90,
+            "price": 5000.0
+          },
+          {
+            "days": 365,
+            "price": 18000.0
+          }
+        ]
+      },
+      "suburban": {
+        "district_name": "Старицкий район",
+        "per_km_cashless": 4.75,
+        "per_km_cash": 4.85
+      }
+    },
+    {
+      "id": "kimry",
+      "name": "Кимры",
+      "location_id": 5,
+      "city": {
+        "single_ride": {
+          "cashless": 40.0,
+          "cash": 45.0,
+          "app_qr": 40.0
+        },
+        "transfer": {
+          "duration_minutes": 30,
+          "first_ride_price": 40.0,
+          "transfer_price": 20.0,
+          "total_price": 60.0,
+          "description": "разовая поездка + пересадка в городской зоне"
+        },
+        "school_pass": {
+          "price": 525.0,
+          "valid_period": "01.09.25 - 04.05.26",
+          "period_type": "calendar_month",
+          "description": "Действует в черте города для школьников"
+        },
+        "social_pass": {
+          "price": 302.0,
+          "period_type": "calendar_month",
+          "description": "Социальная карта жителя Тверской области"
+        },
+        "trips_passes": [
+          {
+            "trips": 5,
+            "duration_days": 30,
+            "price": 190.0,
+            "price_per_trip": 38.0
+          },
+          {
+            "trips": 20,
+            "duration_days": 60,
+            "price": 740.0,
+            "price_per_trip": 37.0
+          },
+          {
+            "trips": 40,
+            "duration_days": 90,
+            "price": 1440.0,
+            "price_per_trip": 36.0
+          },
+          {
+            "trips": 60,
+            "duration_days": 120,
+            "price": 2100.0,
+            "price_per_trip": 35.0
+          }
+        ],
+        "days_passes": [
+          {
+            "days": 1,
+            "price": 140.0
+          },
+          {
+            "days": 3,
+            "price": 360.0
+          },
+          {
+            "days": 7,
+            "price": 600.0
+          },
+          {
+            "days": 15,
+            "price": 1150.0
+          },
+          {
+            "days": 30,
+            "price": 1800.0
+          },
+          {
+            "days": 90,
+            "price": 5000.0
+          },
+          {
+            "days": 365,
+            "price": 18000.0
+          }
+        ]
+      },
+      "suburban": {
+        "district_name": "Кимрский район",
+        "per_km_cashless": 4.75,
+        "per_km_cash": 4.85
+      }
+    },
+    {
+      "id": "zubtsov",
+      "name": "Зубцов",
+      "location_id": 7,
+      "city": {
+        "single_ride": {
+          "cashless": 40.0,
+          "cash": 45.0,
+          "app_qr": 40.0
+        },
+        "transfer": {
+          "duration_minutes": 30,
+          "first_ride_price": 40.0,
+          "transfer_price": 20.0,
+          "total_price": 60.0,
+          "description": "разовая поездка + пересадка в городской зоне"
+        },
+        "school_pass": {
+          "price": 525.0,
+          "valid_period": "01.09.25 - 04.05.26",
+          "period_type": "calendar_month",
+          "description": "Действует в черте города для школьников"
+        },
+        "social_pass": {
+          "price": 302.0,
+          "period_type": "calendar_month",
+          "description": "Социальная карта жителя Тверской области"
+        },
+        "trips_passes": [
+          {
+            "trips": 5,
+            "duration_days": 30,
+            "price": 190.0,
+            "price_per_trip": 38.0
+          },
+          {
+            "trips": 20,
+            "duration_days": 60,
+            "price": 740.0,
+            "price_per_trip": 37.0
+          },
+          {
+            "trips": 40,
+            "duration_days": 90,
+            "price": 1440.0,
+            "price_per_trip": 36.0
+          },
+          {
+            "trips": 60,
+            "duration_days": 120,
+            "price": 2100.0,
+            "price_per_trip": 35.0
+          }
+        ],
+        "days_passes": [
+          {
+            "days": 1,
+            "price": 140.0
+          },
+          {
+            "days": 3,
+            "price": 360.0
+          },
+          {
+            "days": 7,
+            "price": 600.0
+          },
+          {
+            "days": 15,
+            "price": 1150.0
+          },
+          {
+            "days": 30,
+            "price": 1800.0
+          },
+          {
+            "days": 90,
+            "price": 5000.0
+          },
+          {
+            "days": 365,
+            "price": 18000.0
+          }
+        ]
+      },
+      "suburban": {
+        "district_name": "Зубцовский район",
+        "per_km_cashless": 4.75,
+        "per_km_cash": 4.85
+      }
+    },
+    {
+      "id": "konakovo",
+      "name": "Конаково",
+      "location_id": 8,
+      "city": {
+        "single_ride": {
+          "cashless": 40.0,
+          "cash": 45.0,
+          "app_qr": 40.0
+        },
+        "transfer": {
+          "duration_minutes": 30,
+          "first_ride_price": 40.0,
+          "transfer_price": 20.0,
+          "total_price": 60.0,
+          "description": "разовая поездка + пересадка в городской зоне"
+        },
+        "school_pass": {
+          "price": 525.0,
+          "valid_period": "01.09.25 - 04.05.26",
+          "period_type": "calendar_month",
+          "description": "Действует в черте города для школьников"
+        },
+        "social_pass": {
+          "price": 302.0,
+          "period_type": "calendar_month",
+          "description": "Социальная карта жителя Тверской области"
+        },
+        "trips_passes": [
+          {
+            "trips": 5,
+            "duration_days": 30,
+            "price": 190.0,
+            "price_per_trip": 38.0
+          },
+          {
+            "trips": 20,
+            "duration_days": 60,
+            "price": 740.0,
+            "price_per_trip": 37.0
+          },
+          {
+            "trips": 40,
+            "duration_days": 90,
+            "price": 1440.0,
+            "price_per_trip": 36.0
+          },
+          {
+            "trips": 60,
+            "duration_days": 120,
+            "price": 2100.0,
+            "price_per_trip": 35.0
+          }
+        ],
+        "days_passes": [
+          {
+            "days": 1,
+            "price": 140.0
+          },
+          {
+            "days": 3,
+            "price": 360.0
+          },
+          {
+            "days": 7,
+            "price": 600.0
+          },
+          {
+            "days": 15,
+            "price": 1150.0
+          },
+          {
+            "days": 30,
+            "price": 1800.0
+          },
+          {
+            "days": 90,
+            "price": 5000.0
+          },
+          {
+            "days": 365,
+            "price": 18000.0
+          }
+        ]
+      },
+      "suburban": {
+        "district_name": "Конаковский район",
+        "per_km_cashless": 4.75,
+        "per_km_cash": 4.85
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+name: Update Tariffs
+
+on:
+  schedule:
+    # Запуск каждый понедельник в 04:00 UTC
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-tariffs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run tariffs scraper
+        run: python3 server/update_tariffs.py
+
+      - name: Commit and push changes if updated
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet server/tariffs.json assets/data/tariffs.json; then
+            git add server/tariffs.json assets/data/tariffs.json
+            git commit -m "chore(tariffs): update tariffs from tvercard.ru [skip ci]"
+            git push
+          else
+            echo "Тарифы не изменились, коммит не требуется."
+          fi
