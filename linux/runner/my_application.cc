@@ -45,11 +45,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "NOT-Volga");
+    gtk_header_bar_set_title(header_bar, "НЕ-Волга");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "NOT-Volga");
+    gtk_window_set_title(window, "НЕ-Волга");
   }
 
   gtk_window_set_default_size(window, 412, 860);

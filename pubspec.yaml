@@ -1,5 +1,5 @@
 name: not_volga
-description: "NOT-volga - Open source client and ticket generator for Tver transport."
+description: "NOT-volga."
 publish_to: 'none'
 version: 1.0.0+1
 
