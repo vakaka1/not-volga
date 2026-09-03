@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../widgets/volga_bottom_nav_bar.dart';
 import 'map_screen.dart';
@@ -6,6 +8,7 @@ import 'news_screen.dart';
 import 'payment_qr_screen.dart';
 import 'profile_screen.dart';
 import 'services_screen.dart';
+import 'splash_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final int initialIndex;
@@ -25,11 +28,18 @@ class _MainScreenState extends State<MainScreen> {
   bool _isMapSheetVisible = false;
   late final List<Widget> _pages;
 
+  // Состояние загрузки карты при старте приложения
+  bool _isSplashVisible = true;
+  bool _showSplashOverlay = true;
+
+  Timer? _safetyTimeoutTimer;
+
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _previousIndex = widget.initialIndex;
+
     _pages = [
       const NewsScreen(),
       MapScreen(
@@ -40,6 +50,7 @@ class _MainScreenState extends State<MainScreen> {
             });
           }
         },
+        onMapReady: _onMapReady,
       ),
       PaymentQrScreen(
         isActive: _currentIndex == 2,
@@ -48,6 +59,38 @@ class _MainScreenState extends State<MainScreen> {
       const ServicesScreen(),
       const ProfileScreen(),
     ];
+
+    // Страховочный тайм-аут на случай задержек платформенного MapKit
+    _safetyTimeoutTimer = Timer(const Duration(milliseconds: 3500), () {
+      if (mounted && _showSplashOverlay) {
+        _onMapReady();
+      }
+    });
+  }
+
+  void _onMapReady() {
+    if (mounted && _isSplashVisible) {
+      _safetyTimeoutTimer?.cancel();
+      setState(() {
+        _isSplashVisible = false;
+      });
+
+      // Переключаем системные панели на тему приложения
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _safetyTimeoutTimer?.cancel();
+    super.dispose();
   }
 
   void _onTabSelected(int index) {
@@ -63,18 +106,41 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final bool showBottomNav = !(_currentIndex == 1 && _isMapSheetVisible);
 
-    return Scaffold(
-      backgroundColor: AppColors.bgMain,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: showBottomNav
-          ? VolgaBottomNavBar(
-              currentIndex: _currentIndex,
-              onTap: _onTabSelected,
-            )
-          : null,
+    return Stack(
+      children: [
+        // 1. Основное приложение с картой и нижней панелью
+        Scaffold(
+          backgroundColor: AppColors.bgMain,
+          body: IndexedStack(
+            index: _currentIndex,
+            children: _pages,
+          ),
+          bottomNavigationBar: showBottomNav
+              ? VolgaBottomNavBar(
+                  currentIndex: _currentIndex,
+                  onTap: _onTabSelected,
+                )
+              : null,
+        ),
+
+        // 2. Страница загрузки (сплэш), поверх приложения во время старта
+        if (_showSplashOverlay)
+          Positioned.fill(
+            child: AnimatedOpacity(
+              opacity: _isSplashVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              onEnd: () {
+                if (!_isSplashVisible && mounted) {
+                  setState(() {
+                    _showSplashOverlay = false;
+                  });
+                }
+              },
+              child: const SplashScreen(),
+            ),
+          ),
+      ],
     );
   }
 }

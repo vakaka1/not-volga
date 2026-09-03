@@ -12,6 +12,15 @@ import '../models/transport/vehicle_model.dart';
 class MerlinTransportService {
   static const String baseUrl = 'https://api.merlin.tvercard.ru/api/client/v1';
 
+  static final MerlinTransportService _instance = MerlinTransportService._internal();
+  factory MerlinTransportService({http.Client? client}) {
+    if (client != null) {
+      return MerlinTransportService._internal(client: client);
+    }
+    return _instance;
+  }
+  MerlinTransportService._internal({http.Client? client}) : _client = client ?? http.Client();
+
   final http.Client _client;
 
   // Кэш в памяти
@@ -20,7 +29,8 @@ class MerlinTransportService {
   final Map<int, List<RoutePathPoint>> _cachedPaths = {};
   final Map<int, RouteDetailsModel> _cachedRouteDetails = {};
 
-  MerlinTransportService({http.Client? client}) : _client = client ?? http.Client();
+  List<StationModel> get cachedStations => _cachedStations;
+  List<RouteModel> get cachedRoutes => _cachedRoutes;
 
   /// Инициализация сервиса: предзагрузка офлайн-данных Твери из локальных assets
   Future<void> initOfflineData() async {

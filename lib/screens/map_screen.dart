@@ -14,10 +14,12 @@ import '../widgets/map/volga_station_bottom_sheet.dart';
 
 class MapScreen extends StatefulWidget {
   final ValueChanged<bool>? onSheetVisibilityChanged;
+  final VoidCallback? onMapReady;
 
   const MapScreen({
     super.key,
     this.onSheetVisibilityChanged,
+    this.onMapReady,
   });
 
   @override
@@ -65,6 +67,10 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    // 1. Мгновенная синхронная инициализация из предзагруженной базы в памяти
+    _allStations = _transportService.cachedStations;
+    _updateVisibleStations();
+
     _initData();
     _startLiveVehiclesPolling();
     _initRealGpsLocation();
@@ -77,9 +83,17 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
-  /// Получение точной реальной геопозиции пользователя через GPS
+  /// Получение геопозиции пользователя (быстро из кэша, затем точный GPS)
   Future<void> _initRealGpsLocation() async {
     try {
+      // Сначала мгновенно проверяем последнюю известную геопозицию
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null && mounted && _userLocation == null) {
+        setState(() {
+          _userLocation = Point(latitude: lastPos.latitude, longitude: lastPos.longitude);
+        });
+      }
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -89,7 +103,7 @@ class _MapScreenState extends State<MapScreen> {
         final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 5),
+            timeLimit: Duration(seconds: 4),
           ),
         );
         if (mounted) {
@@ -101,7 +115,7 @@ class _MapScreenState extends State<MapScreen> {
             CameraUpdate.newCameraPosition(
               CameraPosition(target: userPt, zoom: 15.5),
             ),
-            animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+            animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.6),
           );
         }
 
@@ -128,16 +142,16 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Инициализация: мгновенная предзагрузка офлайн-данных Твери из локальных assets
+  /// Загрузка данных
   Future<void> _initData() async {
-    await _transportService.initOfflineData();
-    final offlineStations = await _transportService.getStations(locationId: 1);
-
-    if (mounted) {
-      _allStations = offlineStations;
-      _updateVisibleStations();
+    if (_allStations.isEmpty) {
+      await _transportService.initOfflineData();
+      final offlineStations = await _transportService.getStations(locationId: 1);
+      if (mounted) {
+        _allStations = offlineStations;
+        _updateVisibleStations();
+      }
     }
-
     _fetchLiveVehicles();
   }
 
@@ -442,7 +456,7 @@ class _MapScreenState extends State<MapScreen> {
           icon: PlacemarkIcon.single(
             PlacemarkIconStyle(
               image: isSelected ? _selectedStationIcon : _stationIcon,
-              scale: isSelected ? 0.42 : 0.32,
+              scale: isSelected ? 0.25 : 0.24,
             ),
           ),
           opacity: 1.0,
@@ -468,7 +482,7 @@ class _MapScreenState extends State<MapScreen> {
           icon: PlacemarkIcon.single(
             PlacemarkIconStyle(
               image: _blueBusPinIcon,
-              scale: isSelected ? 0.65 : 0.50,
+              scale: isSelected ? 0.46 : 0.38,
               rotationType: RotationType.rotate,
             ),
           ),
@@ -489,7 +503,7 @@ class _MapScreenState extends State<MapScreen> {
           icon: PlacemarkIcon.single(
             PlacemarkIconStyle(
               image: _locationIcon,
-              scale: 0.35,
+              scale: 0.24,
             ),
           ),
           opacity: 1.0,
@@ -516,7 +530,8 @@ class _MapScreenState extends State<MapScreen> {
                   CameraPosition(target: target, zoom: 15.0),
                 ),
               );
-              _fetchBoundsAndFilter();
+              await _fetchBoundsAndFilter();
+              widget.onMapReady?.call();
             },
             onCameraPositionChanged: _onCameraPositionChanged,
             mapObjects: _buildMapObjects(),

@@ -14,6 +14,7 @@ class MainApplication : Application() {
                 MapKitFactory.setApiKey(key)
             }
             MapKitFactory.setLocale("ru_RU")
+            MapKitFactory.initialize(this)
         } catch (e: Exception) {
             Log.e("MapKit", "Failed to initialize MapKit", e)
         }

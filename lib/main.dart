@@ -1,12 +1,16 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'screens/splash_screen.dart';
+import 'screens/main_screen.dart';
 import 'services/balance_service.dart';
+import 'services/merlin_transport_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await BalanceService.instance.init();
+  await Future.wait([
+    BalanceService.instance.init(),
+    MerlinTransportService().initOfflineData(),
+  ]);
   runApp(const NotVolgaApp());
 }
 
@@ -30,7 +34,7 @@ class NotVolgaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       scrollBehavior: AppScrollBehavior(),
-      home: const SplashScreen(),
+      home: const MainScreen(),
     );
   }
 }

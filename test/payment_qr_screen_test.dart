@@ -150,16 +150,16 @@ void main() {
       await tester.pumpAndSettle();
 
       // Check contents
-      expect(find.text('Оплата проезда'), findsOneWidget);
+      expect(find.text('Купить билет'), findsOneWidget);
       expect(find.textContaining('№24'), findsOneWidget);
       expect(find.text('Стоимость проезда:'), findsOneWidget);
       expect(find.text('40 ₽'), findsOneWidget);
       expect(find.text('Баланс кошелька:'), findsOneWidget);
       expect(find.text('100 ₽'), findsOneWidget);
-      expect(find.text('Оплатить 40 ₽'), findsOneWidget);
+      expect(find.text('Купить 40 ₽'), findsOneWidget);
 
       // Tap Pay button
-      await tester.tap(find.text('Оплатить 40 ₽'));
+      await tester.tap(find.text('Купить 40 ₽'));
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
 
@@ -196,10 +196,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('20 ₽'), findsOneWidget);
-      expect(find.text('Оплатить 40 ₽'), findsOneWidget);
+      expect(find.text('Купить 40 ₽'), findsOneWidget);
 
       // Attempt payment with insufficient funds
-      await tester.tap(find.text('Оплатить 40 ₽'));
+      await tester.tap(find.text('Купить 40 ₽'));
       await tester.pumpAndSettle();
 
       // Error dialog matching res/error.webp is displayed

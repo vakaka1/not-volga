@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 import '../constants/app_assets.dart';
-import '../services/merlin_transport_service.dart';
 import '../theme/app_colors.dart';
-import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final VoidCallback? onAnimationComplete;
+
+  const SplashScreen({
+    super.key,
+    this.onAnimationComplete,
+  });
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -17,6 +19,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fadeAnimation;
+  late final Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -33,7 +36,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 900),
     );
 
     _fadeAnimation = CurvedAnimation(
@@ -41,40 +44,16 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeIn,
     );
 
-    _controller.forward();
+    _scaleAnimation = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      ),
+    );
 
-    // Предзагрузка офлайн карты и геопозиции во время сплэш-скрина
-    _preWarmMapData();
-  }
-
-  Future<void> _preWarmMapData() async {
-    // Параллельно инициализируем офлайн базу данных Твери
-    try {
-      MerlinTransportService().initOfflineData();
-      Geolocator.checkPermission().then((perm) async {
-        if (perm == LocationPermission.denied) {
-          await Geolocator.requestPermission();
-        }
-      }).catchError((_) {});
-    } catch (_) {}
-
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const MainScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-        ),
-      );
-    }
+    _controller.forward().then((_) {
+      widget.onAnimationComplete?.call();
+    });
   }
 
   @override
@@ -90,21 +69,25 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Оригинальный фирменный фон Volga
+          // 1. Фирменный градиентный/паттерный фон Volga
           Image.asset(
             AppAssets.bgLauncher,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
+            errorBuilder: (context, error, stackTrace) =>
+                const ColoredBox(color: AppColors.primary),
           ),
 
-          // 2. Оригинальный белый логотип «Волга» строго по центру
+          // 2. Белый логотип «Волга» строго по центру с плавной анимацией
           Center(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: Image.asset(
-                AppAssets.logoWhite,
-                width: 230,
-                fit: BoxFit.contain,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Image.asset(
+                  AppAssets.logoWhite,
+                  width: 230,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),

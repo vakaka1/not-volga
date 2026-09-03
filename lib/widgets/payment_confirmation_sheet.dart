@@ -13,22 +13,49 @@ class ScannedTransportInfo {
   final String city;
   final int fare;
   final String rawQrData;
+  final bool isIntercity;
+  final String startStation;
+  final String endStation;
+  final List<String> availableStations;
+  final int routeId;
+  final bool isLiveVehicle;
 
   const ScannedTransportInfo({
     required this.routeNumber,
-    this.transportType = 'Автобус',
+    this.transportType = 'ЛиАЗ 429260',
     this.regNumber = 'Е 456 КХ 69',
     this.carrier = 'ООО «Верхневолжское АТП»',
     this.city = 'Тверь',
     this.fare = 40,
     required this.rawQrData,
+    this.isIntercity = false,
+    this.startStation = 'Мигалово',
+    this.endStation = 'Гипермаркет Леруа-Мерлен',
+    this.availableStations = const [
+      'Мигалово',
+      'Пролетарский район',
+      'Площадь Капошвара',
+      'Волоколамский путепровод',
+      'Гипермаркет Леруа-Мерлен',
+    ],
+    this.routeId = 12423,
+    this.isLiveVehicle = false,
   });
 
   factory ScannedTransportInfo.fromRawData(String rawData) {
-    // Check if rawData has a specific pattern (e.g. route, vehicle ID or URL)
     String route = '№24';
-    String reg = 'Е 456 КХ 69';
-    String type = 'Автобус';
+    String reg = 'М 842 ТТ 69';
+    String type = 'ЛиАЗ 429260';
+    bool intercity = false;
+    String start = 'Мигалово';
+    String end = 'Гипермаркет Леруа-Мерлен';
+    List<String> stations = [
+      'Мигалово',
+      'Пролетарский район',
+      'Площадь Капошвара',
+      'Волоколамский путепровод',
+      'Гипермаркет Леруа-Мерлен',
+    ];
 
     final clean = rawData.trim();
     final lower = clean.toLowerCase();
@@ -36,25 +63,43 @@ class ScannedTransportInfo {
     if (lower.contains('route=') || lower.contains('marshrut=')) {
       final match = RegExp(r'(?:route|marshrut)=([a-zA-Z0-9а-яА-Я]+)').firstMatch(clean);
       if (match != null && match.group(1) != null) {
-        route = '№${match.group(1)}';
+        final rName = match.group(1)!;
+        route = '№$rName';
+        final digits = int.tryParse(rName.replaceAll(RegExp(r'\D'), ''));
+        intercity = (digits != null && digits >= 100) || rName.length >= 3;
       }
     } else if (RegExp(r'^\d{1,3}[а-яА-Я]?$').hasMatch(clean)) {
       route = '№$clean';
-    } else if (lower.contains('tram') || lower.contains('трамвай')) {
-      type = 'Трамвай';
-      route = '№5';
-      reg = 'Т 102 ТВ 69';
-    } else if (lower.contains('trolley') || lower.contains('троллейбус')) {
-      type = 'Троллейбус';
-      route = '№3';
-      reg = 'Т 345 ТВ 69';
+      final digits = int.tryParse(clean.replaceAll(RegExp(r'\D'), ''));
+      intercity = (digits != null && digits >= 100) || clean.length >= 3;
+    } else if (clean.contains('7c50232b') || clean.contains('69-0391') || clean.contains('10391')) {
+      // Борт 10391 с фото qr-code.webp (ЛиАЗ-4292.60)
+      route = '№33';
+      reg = 'С 128 СР 69';
+      type = 'ЛиАЗ 429260';
+      intercity = false;
+      start = 'Мигалово';
+      end = 'Гипермаркет Леруа-Мерлен';
     } else {
-      // Generate a deterministic or realistic route based on rawData
       final hash = clean.hashCode.abs();
-      final routes = ['№1', '№3', '№6', '№9', '№15', '№21', '№24', '№30', '№33', '№43', '№108', '№208'];
-      final regNumbers = ['Е 456 КХ 69', 'В 789 АА 69', 'К 123 ОО 69', 'М 842 ТТ 69', 'О 911 РР 69'];
+      final routes = ['№1', '№3', '№6', '№9', '№15', '№20', '№21', '№24', '№30', '№33', '№42', '№108', '№154', '№208'];
+      final regNumbers = ['Е 456 КХ 69', 'В 789 АА 69', 'К 123 ОО 69', 'М 842 ТТ 69', 'О 911 РР 69', 'С 128 СР 69'];
       route = routes[hash % routes.length];
       reg = regNumbers[hash % regNumbers.length];
+      final digits = int.tryParse(route.replaceAll(RegExp(r'\D'), ''));
+      intercity = (digits != null && digits >= 100);
+    }
+
+    if (intercity) {
+      start = 'Автовокзал (Тверь)';
+      end = 'Даниловское / Конаково';
+      stations = [
+        'Автовокзал (Тверь)',
+        'Эммаусс',
+        'Городня',
+        'Редкино',
+        'Даниловское / Конаково',
+      ];
     }
 
     return ScannedTransportInfo(
@@ -62,11 +107,15 @@ class ScannedTransportInfo {
       transportType: type,
       regNumber: reg,
       rawQrData: rawData,
+      isIntercity: intercity,
+      startStation: start,
+      endStation: end,
+      availableStations: stations,
     );
   }
 }
 
-/// Modal bottom sheet shown upon detecting a QR code for trip payment.
+/// Modal bottom sheet shown upon detecting a QR code for trip ticket purchase.
 class PaymentConfirmationSheet extends StatefulWidget {
   final ScannedTransportInfo transportInfo;
   final VoidCallback onPaymentSuccess;
@@ -107,6 +156,60 @@ class PaymentConfirmationSheet extends StatefulWidget {
 
 class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
   bool _isPaying = false;
+  late String _selectedStartStation;
+  late String _selectedEndStation;
+  late int _calculatedFare;
+
+  @override
+  void initState() {
+    super.initState();
+    final stations = widget.transportInfo.availableStations;
+    _selectedStartStation = widget.transportInfo.startStation.isNotEmpty
+        ? widget.transportInfo.startStation
+        : (stations.isNotEmpty ? stations.first : 'Начальная');
+    _selectedEndStation = widget.transportInfo.endStation.isNotEmpty
+        ? widget.transportInfo.endStation
+        : (stations.isNotEmpty ? stations.last : 'Конечная');
+
+    _calculatedFare = _computeFare();
+  }
+
+  int _computeFare() {
+    if (!widget.transportInfo.isIntercity) {
+      return 40; // Фиксированный городской тариф Твери
+    }
+
+    // Для пригородного/междугороднего маршрута расчёт по количеству остановок
+    final stations = widget.transportInfo.availableStations;
+    final startIndex = stations.indexOf(_selectedStartStation);
+    final endIndex = stations.indexOf(_selectedEndStation);
+
+    if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
+      final diff = endIndex - startIndex;
+      final fare = 40 + (diff * 5);
+      return fare.clamp(40, 130);
+    }
+
+    return 40;
+  }
+
+  void _onStartStationChanged(String? val) {
+    if (val != null) {
+      setState(() {
+        _selectedStartStation = val;
+        _calculatedFare = _computeFare();
+      });
+    }
+  }
+
+  void _onEndStationChanged(String? val) {
+    if (val != null) {
+      setState(() {
+        _selectedEndStation = val;
+        _calculatedFare = _computeFare();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +217,7 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
       animation: BalanceService.instance,
       builder: (context, _) {
         final currentBalance = BalanceService.instance.balance;
-        final fare = widget.transportInfo.fare;
+        final fare = _calculatedFare;
         final hasSufficientBalance = currentBalance >= fare;
 
         return Container(
@@ -145,12 +248,12 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Title
+              // Title: "Купить билет"
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Оплата проезда',
+                    'Купить билет',
                     style: TextStyle(
                       fontFamily: 'NotoSans',
                       fontSize: 20,
@@ -211,14 +314,18 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '${widget.transportInfo.transportType} ${widget.transportInfo.routeNumber}',
-                                  style: const TextStyle(
-                                    fontFamily: 'NotoSans',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${widget.transportInfo.transportType} ${widget.transportInfo.routeNumber}',
+                                      style: const TextStyle(
+                                        fontFamily: 'NotoSans',
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 Text(
                                   widget.transportInfo.city,
@@ -256,17 +363,52 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
                     const SizedBox(height: 12),
                     Divider(color: Colors.white.withValues(alpha: 0.2), height: 1),
                     const SizedBox(height: 10),
-                    Text(
-                      widget.transportInfo.carrier,
-                      style: TextStyle(
-                        fontFamily: 'NotoSans',
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.75),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.transportInfo.carrier,
+                            style: TextStyle(
+                              fontFamily: 'NotoSans',
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.75),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (widget.transportInfo.isLiveVehicle)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16A34A),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'На рейсе',
+                              style: TextStyle(
+                                fontFamily: 'NotoSans',
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Route & Station Selection
+              if (!widget.transportInfo.isIntercity)
+                // ГОРОДСКОЙ АВТОБУС (1-2 цифры): показываем конечную (последнюю) остановку
+                _buildCityRouteCard()
+              else
+                // МЕЖДУГОРОДНИЙ / ПРИГОРОДНЫЙ АВТОБУС: выбор начальной и конечной остановки
+                _buildIntercityRouteCard(),
+
               const SizedBox(height: 16),
 
               // Fare & Balance Info
@@ -337,7 +479,7 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
               ),
               const SizedBox(height: 20),
 
-              // Pay Button
+              // Buy / Pay Button: "Купить"
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
@@ -360,7 +502,7 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
                           ),
                         )
                       : Text(
-                          'Оплатить $fare ₽',
+                          'Купить $fare ₽',
                           style: const TextStyle(
                             fontFamily: 'NotoSans',
                             fontSize: 16,
@@ -373,6 +515,174 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
           ),
         );
       },
+    );
+  }
+
+  /// Карточка для городского маршрута с отображением последней остановки
+  Widget _buildCityRouteCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgGray,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B5CFE).withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.flag_outlined,
+              size: 20,
+              color: Color(0xFF3B5CFE),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Конечная остановка',
+                  style: TextStyle(
+                    fontFamily: 'NotoSans',
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.transportInfo.endStation,
+                  style: const TextStyle(
+                    fontFamily: 'NotoSans',
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Карточка для пригородного маршрута с выбором начальной и конечной остановки
+  Widget _buildIntercityRouteCard() {
+    final stations = widget.transportInfo.availableStations;
+    final validStations = stations.isNotEmpty ? stations : ['Начальная', 'Конечная'];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgGray,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Маршрут поездки',
+            style: TextStyle(
+              fontFamily: 'NotoSans',
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Начальная остановка
+          Row(
+            children: [
+              const Icon(Icons.radio_button_checked, size: 18, color: Color(0xFF3B5CFE)),
+              const SizedBox(width: 8),
+              const Text(
+                'Откуда:',
+                style: TextStyle(
+                  fontFamily: 'NotoSans',
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: validStations.contains(_selectedStartStation) ? _selectedStartStation : validStations.first,
+                    items: validStations.map((st) {
+                      return DropdownMenuItem<String>(
+                        value: st,
+                        child: Text(
+                          st,
+                          style: const TextStyle(
+                            fontFamily: 'NotoSans',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: _onStartStationChanged,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 16),
+
+          // Конечная остановка
+          Row(
+            children: [
+              const Icon(Icons.location_on, size: 18, color: Color(0xFFDC2626)),
+              const SizedBox(width: 8),
+              const Text(
+                'Куда:',
+                style: TextStyle(
+                  fontFamily: 'NotoSans',
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: validStations.contains(_selectedEndStation) ? _selectedEndStation : validStations.last,
+                    items: validStations.map((st) {
+                      return DropdownMenuItem<String>(
+                        value: st,
+                        child: Text(
+                          st,
+                          style: const TextStyle(
+                            fontFamily: 'NotoSans',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: _onEndStationChanged,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -474,6 +784,15 @@ class PaymentSuccessDialog extends StatelessWidget {
                   const SizedBox(height: 8),
                   _buildTicketRow('Госномер', transportInfo.regNumber),
                   const SizedBox(height: 8),
+                  if (transportInfo.isIntercity) ...[
+                    _buildTicketRow('Откуда', transportInfo.startStation),
+                    const SizedBox(height: 8),
+                    _buildTicketRow('Куда', transportInfo.endStation),
+                    const SizedBox(height: 8),
+                  ] else ...[
+                    _buildTicketRow('Конечная', transportInfo.endStation),
+                    const SizedBox(height: 8),
+                  ],
                   _buildTicketRow('Дата и время', '$dateStr $timeStr'),
                   const SizedBox(height: 8),
                   _buildTicketRow('Номер билета', ticketNumber),
@@ -524,13 +843,18 @@ class PaymentSuccessDialog extends StatelessWidget {
             color: AppColors.textSecondary,
           ),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            fontFamily: 'NotoSans',
-            fontSize: 14,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-            color: AppColors.textPrimary,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontFamily: 'NotoSans',
+              fontSize: 14,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -597,4 +921,3 @@ class InsufficientFundsDialog extends StatelessWidget {
     );
   }
 }
-
