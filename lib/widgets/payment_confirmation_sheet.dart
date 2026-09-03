@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../constants/app_assets.dart';
 import '../services/balance_service.dart';
+import '../services/ticket_service.dart';
 import '../theme/app_colors.dart';
+import 'insufficient_funds_dialog.dart';
 
 /// Parsed or simulated information from a scanned transport QR code.
 class ScannedTransportInfo {
@@ -20,13 +22,14 @@ class ScannedTransportInfo {
   final List<String> availableStations;
   final int routeId;
   final bool isLiveVehicle;
+  final String boardNumber;
 
   const ScannedTransportInfo({
     required this.routeNumber,
     this.routeTitle = '',
     this.transportType = 'ЛиАЗ 429260',
-    this.regNumber = 'Е 456 КХ 69',
-    this.carrier = 'ООО «Верхневолжское АТП»',
+    this.regNumber = '',
+    this.carrier = 'ООО "Верхневолжское автотранспортное предприятие"',
     this.city = 'Тверь',
     this.fare = 40,
     required this.rawQrData,
@@ -36,6 +39,7 @@ class ScannedTransportInfo {
     this.availableStations = const [],
     this.routeId = 0,
     this.isLiveVehicle = false,
+    this.boardNumber = '',
   });
 
   factory ScannedTransportInfo.fromRawData(String rawData) {
@@ -709,6 +713,17 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
 
     await Future.delayed(const Duration(milliseconds: 600));
     await BalanceService.instance.setBalance(currentBalance - fare);
+    await TicketService.instance.createTicket(
+      routeNumber: widget.transportInfo.routeNumber,
+      routeTitle: widget.transportInfo.routeTitle,
+      station: widget.transportInfo.startStation,
+      endStation: widget.transportInfo.isIntercity ? _selectedEndStation : null,
+      fare: fare,
+      licenseNumber: widget.transportInfo.regNumber,
+      boardNumber: widget.transportInfo.boardNumber,
+      carrierName: widget.transportInfo.carrier,
+      vehicleModel: widget.transportInfo.transportType,
+    );
 
     if (mounted) {
       widget.onPaymentSuccess();
@@ -870,62 +885,3 @@ class PaymentSuccessDialog extends StatelessWidget {
   }
 }
 
-/// Dialog shown when attempting payment with insufficient balance.
-/// Reproduces res/error.webp with exact title, message, shape (BorderRadius.circular(4.0)), and flat "OK" button.
-class InsufficientFundsDialog extends StatelessWidget {
-  const InsufficientFundsDialog({super.key});
-
-  static Future<void> show(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const InsufficientFundsDialog(),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4.0),
-      ),
-      title: const Text(
-        'Ошибка',
-        style: TextStyle(
-          fontFamily: 'NotoSans',
-          fontSize: 19,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-        ),
-      ),
-      content: const Text(
-        'Недостаточно средств',
-        style: TextStyle(
-          fontFamily: 'NotoSans',
-          fontSize: 15,
-          color: AppColors.textPrimary,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF165AF0),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: const Text(
-            'OK',
-            style: TextStyle(
-              fontFamily: 'NotoSans',
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

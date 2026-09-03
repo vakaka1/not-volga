@@ -69,44 +69,46 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
                 'Остановка',
                 style: TextStyle(
                   fontFamily: 'NotoSans',
-                  fontSize: 15,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w400,
-                  color: Color(0xFF707070),
+                  color: Color(0xFF1E1E1E),
                 ),
               ),
 
               const SizedBox(height: 2),
 
-              // 2. Название остановки (жирный крупный заголовок)
+              // 2. Название остановки (аккуратный заголовок)
               Text(
                 widget.station.name,
                 style: const TextStyle(
                   fontFamily: 'NotoSans',
-                  fontSize: 28,
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF111111),
                   height: 1.15,
+                  letterSpacing: -0.2,
                 ),
               ),
 
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
 
               // 3. Адрес
               Text(
-                widget.station.address.isNotEmpty ? widget.station.address : 'Тверь, Советская улица',
+                widget.station.address.isNotEmpty ? widget.station.address : 'Тверь, улица Дарвина',
                 style: const TextStyle(
                   fontFamily: 'NotoSans',
-                  fontSize: 15,
-                  color: Color(0xFF707070),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF8E8E93),
                 ),
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 13),
 
               // 4. Большая синяя кнопка "Посмотреть расписание"
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 44,
                 child: ElevatedButton(
                   onPressed: widget.onScheduleTap ?? () {},
                   style: ElevatedButton.styleFrom(
@@ -114,61 +116,73 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    padding: EdgeInsets.zero,
                   ),
                   child: const Text(
                     'Посмотреть расписание',
                     style: TextStyle(
                       fontFamily: 'NotoSans',
-                      fontSize: 17,
+                      fontSize: 15.5,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 14),
-              const Divider(color: Color(0xFFE8EAEF), height: 1, thickness: 1),
+              const SizedBox(height: 13),
+              const Divider(color: Color(0xFFEDEDED), height: 1, thickness: 1),
 
-              // 5. Список рейсов / прибывающего транспорта
-              if (widget.isLoadingArrivals && widget.arrivals.isEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0052FF)),
-                    ),
-                  ),
-                ),
-              ] else if (widget.arrivals.isEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: Text(
-                      'Нет данных о ближайших рейсах',
-                      style: TextStyle(
-                        fontFamily: 'NotoSans',
-                        fontSize: 14,
-                        color: Color(0xFF9E9E9E),
+              // 5. Список рейсов / прибывающего транспорта (только в течение часа)
+              Builder(
+                builder: (context) {
+                  final visibleArrivals = widget.arrivals.where((a) {
+                    final mins = a.minutesToFirstArrival;
+                    return mins != null && mins <= 60;
+                  }).toList();
+
+                  if (widget.isLoadingArrivals && visibleArrivals.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0052FF)),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: widget.arrivals.length,
-                  separatorBuilder: (context, index) =>
-                      const Divider(color: Color(0xFFE8EAEF), height: 1, thickness: 1),
-                  itemBuilder: (context, index) {
-                    final item = widget.arrivals[index];
-                    return _buildArrivalItem(context, item);
-                  },
-                ),
-              ],
+                    );
+                  } else if (visibleArrivals.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(
+                        child: Text(
+                          'Нет данных о ближайших рейсах на этот час',
+                          style: TextStyle(
+                            fontFamily: 'NotoSans',
+                            fontSize: 14,
+                            color: Color(0xFF9E9E9E),
+                          ),
+                        ),
+                      ),
+                    );
+                  } else {
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: visibleArrivals.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(color: Color(0xFFEDEDED), height: 1, thickness: 1),
+                      itemBuilder: (context, index) {
+                        final item = visibleArrivals[index];
+                        return _buildArrivalItem(context, item);
+                      },
+                    );
+                  }
+                },
+              ),
             ],
           ),
         );
@@ -176,9 +190,7 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
     );
   }
 
-  /// Строка рейса в точности как на res/ost.webp:
-  /// [ 🚌 20 ► ]  [ ♿ ]  [ Н 756 СР  69 ]      7 мин
-  ///                                          15 мин
+  /// Строка рейса в точности как на res/ost.webp / res/app/original.webp:
   Widget _buildArrivalItem(BuildContext context, StationArrivalModel item) {
     return InkWell(
       onTap: () {
@@ -189,52 +201,52 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
         }
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 1. Синий бейдж маршрута с острием наружу
+            // 1. Синий бейдж маршрута с фиксированным размером
             VolgaRouteBadge(
               routeName: item.routeName,
-              height: 36,
-              fontSize: 18,
+              width: 76,
+              height: 31,
+              fontSize: 16,
             ),
 
-            const SizedBox(width: 8),
-
             // 2. Желтый значок доступности (инвалидная коляска)
-            if (item.hasWheelchair) ...[
+            if (item.hasWheelchair && item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
+              const SizedBox(width: 8),
               Container(
-                width: 32,
-                height: 32,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFC700),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Center(
-                  child: Icon(Icons.accessible, size: 20, color: Colors.black),
-                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.accessible, size: 16, color: Colors.black),
               ),
-              const SizedBox(width: 8),
             ],
 
             // 3. Плашка госномера
             if (item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
+              const SizedBox(width: 6),
               Container(
-                height: 32,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F1F5),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   item.licenseNumber!,
                   style: const TextStyle(
                     fontFamily: 'Roboto',
-                    fontSize: 14,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111111),
-                    letterSpacing: 1.0,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),
@@ -251,20 +263,22 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
                   item.primaryTimeText,
                   style: const TextStyle(
                     fontFamily: 'NotoSans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w700,
                     color: Color(0xFF111111),
+                    height: 1.15,
                   ),
                 ),
                 if (item.secondaryTimeText != null) ...[
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 2),
                   Text(
                     item.secondaryTimeText!,
                     style: const TextStyle(
                       fontFamily: 'NotoSans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
                       color: Color(0xFF8E8E93),
+                      height: 1.15,
                     ),
                   ),
                 ],

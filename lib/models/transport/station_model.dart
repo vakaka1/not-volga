@@ -10,7 +10,7 @@ class StationModel {
   const StationModel({
     required this.stationId,
     required this.name,
-    required this.address,
+    this.address = '',
     required this.lat,
     required this.lng,
     this.locationId = 1,

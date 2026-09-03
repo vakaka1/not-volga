@@ -14,7 +14,7 @@ class StationArrivalModel {
     required this.endStation,
     this.estimatedArrivals = const [],
     this.licenseNumber,
-    this.hasWheelchair = true,
+    this.hasWheelchair = false,
   });
 
   factory StationArrivalModel.fromJson(Map<String, dynamic> json, {String? matchedLicense}) {
@@ -35,7 +35,7 @@ class StationArrivalModel {
       endStation: json['end_station'] as String? ?? '',
       estimatedArrivals: arrivals,
       licenseNumber: matchedLicense,
-      hasWheelchair: true,
+      hasWheelchair: matchedLicense != null && matchedLicense.isNotEmpty,
     );
   }
 

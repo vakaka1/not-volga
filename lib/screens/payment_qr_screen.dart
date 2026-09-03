@@ -3,20 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../screens/qr_route_payment_screen.dart';
+import '../services/balance_service.dart';
 import '../services/merlin_transport_service.dart';
 import '../theme/app_colors.dart';
-import '../widgets/payment_confirmation_sheet.dart';
+import '../widgets/insufficient_funds_dialog.dart';
 import '../widgets/qr_scanner_overlay.dart';
 
 /// Screen for scanning QR codes to pay for public transport trips.
 /// Visual layout strictly reproduces `res/qr.webp` with real-time yellow contour detection.
 class PaymentQrScreen extends StatefulWidget {
   final VoidCallback? onBack;
+  final VoidCallback? onPaymentSuccess;
   final bool isActive;
 
   const PaymentQrScreen({
     super.key,
     this.onBack,
+    this.onPaymentSuccess,
     this.isActive = true,
   });
 
@@ -32,6 +35,7 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   Size? _captureSize;
   bool _isProcessing = false;
   bool _isTorchOn = false;
+  bool _isErrorDialogShowing = false;
 
   @override
   void initState() {
@@ -45,6 +49,22 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
       returnImage: false,
       autoStart: true,
     );
+  }
+
+  Future<void> _showInsufficientFundsDialog() async {
+    if (!mounted || _isErrorDialogShowing) return;
+    setState(() {
+      _isErrorDialogShowing = true;
+    });
+    HapticFeedback.heavyImpact();
+    await InsufficientFundsDialog.show(context);
+    if (mounted) {
+      setState(() {
+        _isErrorDialogShowing = false;
+        _detectedBarcodes = [];
+        _isProcessing = false;
+      });
+    }
   }
 
   Future<void> _startCamera() async {
@@ -114,7 +134,13 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_isProcessing) return;
+    if (_isProcessing || _isErrorDialogShowing) return;
+
+    // Minimum balance for Tver is 40 rubles: do not scan/proceed if insufficient
+    if (BalanceService.instance.balance < 40) {
+      _showInsufficientFundsDialog();
+      return;
+    }
 
     final barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
@@ -192,13 +218,24 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
 
     if (!mounted) return;
 
-    await Navigator.of(context).push<void>(
+    final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => QrRoutePaymentScreen(
           transportInfo: transportInfo,
         ),
       ),
     );
+
+    if (result == true) {
+      // Payment completed and passenger dismissed confirmation dialog.
+      // Redirect to Map as requested!
+      if (widget.onPaymentSuccess != null) {
+        widget.onPaymentSuccess!();
+      } else {
+        _handleBack();
+      }
+      return;
+    }
 
     if (mounted) {
       setState(() {

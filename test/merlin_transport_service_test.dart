@@ -101,5 +101,43 @@ void main() {
       expect(arrivals.first.licenseNumber, 'H 756 CP 69');
       expect(arrivals.first.hasWheelchair, true);
     });
+
+    test('getStationArrivals sorts arrivals with closest first and later below', () async {
+      final now = DateTime.now();
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/stations/102/routes')) {
+          final sampleArrivals = [
+            {
+              'route_id': 100,
+              'name': 'LaterBus',
+              'end_station': 'Station B',
+              'estimated_arrival': [now.add(const Duration(minutes: 25)).toIso8601String()],
+            },
+            {
+              'route_id': 200,
+              'name': 'ClosestBus',
+              'end_station': 'Station A',
+              'estimated_arrival': [now.add(const Duration(minutes: 3)).toIso8601String()],
+            },
+            {
+              'route_id': 300,
+              'name': 'MiddleBus',
+              'end_station': 'Station C',
+              'estimated_arrival': [now.add(const Duration(minutes: 10)).toIso8601String()],
+            },
+          ];
+          return http.Response(jsonEncode(sampleArrivals), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final service = MerlinTransportService(client: mockClient);
+      final arrivals = await service.getStationArrivals(102);
+
+      expect(arrivals.length, 3);
+      expect(arrivals[0].routeName, 'ClosestBus');
+      expect(arrivals[1].routeName, 'MiddleBus');
+      expect(arrivals[2].routeName, 'LaterBus');
+    });
   });
 }

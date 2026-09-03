@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/transport/route_model.dart';
 import '../services/balance_service.dart';
 import '../services/merlin_transport_service.dart';
+import '../services/ticket_service.dart';
+import '../widgets/insufficient_funds_dialog.dart';
 import '../widgets/payment_confirmation_sheet.dart';
 import '../widgets/qr_payment_ok_dialog.dart';
 
@@ -28,6 +30,7 @@ class _QrRoutePaymentScreenState extends State<QrRoutePaymentScreen> {
   late String _routeTitle;
   late String _routeNumberOnly;
   late List<String> _availableStations;
+  late String _regNumber;
   bool _isPaying = false;
 
   @override
@@ -44,6 +47,14 @@ class _QrRoutePaymentScreenState extends State<QrRoutePaymentScreen> {
     _routeTitle = widget.transportInfo.routeTitle;
 
     _availableStations = List<String>.from(widget.transportInfo.availableStations);
+
+    _regNumber = widget.transportInfo.regNumber;
+    if (_regNumber.isEmpty) {
+      final liveBus = MerlinTransportService().getLiveVehicleForRoute(rNum);
+      if (liveBus != null && liveBus.licenseNumber.isNotEmpty) {
+        _regNumber = liveBus.formattedLicenseNumber;
+      }
+    }
   }
 
   void _handleBack() {
@@ -195,11 +206,17 @@ class _QrRoutePaymentScreenState extends State<QrRoutePaymentScreen> {
         final title = selectedRoute.title.isNotEmpty ? selectedRoute.title : selectedRoute.startEndStations;
         final stations = details?.stations.map((s) => s.name).toList() ?? [];
 
+        final liveBus = MerlinTransportService().getLiveVehicleForRoute(selectedRoute.name);
+        final newReg = (liveBus != null && liveBus.licenseNumber.isNotEmpty)
+            ? liveBus.formattedLicenseNumber
+            : _regNumber;
+
         setState(() {
           _routeTitle = title;
           _routeNumberOnly = selectedRoute.name;
           _availableStations = stations;
           _currentStation = '';
+          _regNumber = newReg;
         });
       }
     });
@@ -370,6 +387,22 @@ class _QrRoutePaymentScreenState extends State<QrRoutePaymentScreen> {
     await Future.delayed(const Duration(milliseconds: 300));
     await BalanceService.instance.setBalance(currentBalance - fare);
 
+    // Create active 2-hour ticket with live bus telemetry
+    await TicketService.instance.createTicket(
+      routeNumber: _routeNumberOnly,
+      routeTitle: _routeTitle,
+      station: _currentStation,
+      fare: fare,
+      licenseNumber: _regNumber,
+      boardNumber: widget.transportInfo.boardNumber,
+      carrierName: widget.transportInfo.carrier.isNotEmpty
+          ? widget.transportInfo.carrier
+          : 'ООО "Верхневолжское автотранспортное предприятие"',
+      vehicleModel: widget.transportInfo.transportType.isNotEmpty
+          ? widget.transportInfo.transportType
+          : 'ЛиАЗ 429260',
+    );
+
     if (mounted) {
       setState(() {
         _isPaying = false;
@@ -379,7 +412,8 @@ class _QrRoutePaymentScreenState extends State<QrRoutePaymentScreen> {
       await QrPaymentOkDialog.show(context, fare: fare);
 
       if (mounted) {
-        _handleBack();
+        // Return true to redirect directly to the map screen
+        Navigator.of(context).pop(true);
       }
     }
   }

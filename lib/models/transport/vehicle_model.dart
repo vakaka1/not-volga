@@ -17,6 +17,7 @@ class VehicleModel {
   final String? qrNumber;
   final String? qrUuid;
   final DateTime? timeLocation;
+  final String carrierName;
 
   const VehicleModel({
     required this.vehicleId,
@@ -37,6 +38,7 @@ class VehicleModel {
     this.qrNumber,
     this.qrUuid,
     this.timeLocation,
+    this.carrierName = '',
   });
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
@@ -53,6 +55,11 @@ class VehicleModel {
         parsedTime = DateTime.parse(timeStr);
       } catch (_) {}
     }
+
+    final carrierObj = json['carrier'] as Map<String, dynamic>?;
+    final carrierName = carrierObj?['name'] as String? ??
+        (json['carrier_name'] as String? ??
+            (json['carrier'] is String ? json['carrier'] as String : ''));
 
     return VehicleModel(
       vehicleId: json['vehicle_id'] as String? ?? '',
@@ -73,6 +80,7 @@ class VehicleModel {
       qrNumber: qrNumber,
       qrUuid: qrUuid,
       timeLocation: parsedTime,
+      carrierName: carrierName,
     );
   }
 

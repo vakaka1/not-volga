@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_assets.dart';
 import '../theme/app_colors.dart';
 import 'settings_screen.dart';
+import 'trip_history_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -47,6 +48,14 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  void _openTripHistory(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const TripHistoryScreen(),
+      ),
+    );
+  }
+
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -74,9 +83,7 @@ class ProfileScreen extends StatelessWidget {
                       label: 'История\nпоездок',
                       iconWidth: 34,
                       iconHeight: 14,
-                      onTap: () {
-                        // Placeholder for ride history
-                      },
+                      onTap: () => _openTripHistory(context),
                     ),
                   ),
                   Expanded(

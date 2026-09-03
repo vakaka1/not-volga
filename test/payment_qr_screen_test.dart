@@ -6,6 +6,7 @@ import 'package:not_volga/screens/qr_route_payment_screen.dart';
 import 'package:not_volga/services/balance_service.dart';
 import 'package:not_volga/services/merlin_transport_service.dart';
 import 'package:not_volga/services/qr_payload_parser.dart';
+import 'package:not_volga/services/ticket_service.dart';
 import 'package:not_volga/theme/app_colors.dart';
 import 'package:not_volga/widgets/payment_confirmation_sheet.dart';
 import 'package:not_volga/widgets/qr_payment_ok_dialog.dart';
@@ -344,6 +345,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(QrPaymentOkDialog), findsNothing);
+
+      // Verify 2-hour active ticket is stored
+      expect(TicketService.instance.hasActiveTicket, isTrue);
+      expect(TicketService.instance.activeTicket?.routeNumber, '2');
+      expect(TicketService.instance.activeTicket?.fare, 40);
+
+      // Clear ticket to cancel timer for clean test teardown
+      await TicketService.instance.clearTicket();
     });
   });
 }

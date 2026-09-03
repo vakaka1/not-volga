@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/ticket_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/volga_active_ticket_sheet.dart';
 import '../widgets/volga_bottom_nav_bar.dart';
 import 'map_screen.dart';
 import 'news_screen.dart';
@@ -22,7 +24,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   late int _currentIndex;
   int _previousIndex = 1;
   bool _isMapSheetVisible = false;
@@ -34,10 +36,12 @@ class _MainScreenState extends State<MainScreen> {
   bool _showSplashOverlay = true;
 
   Timer? _safetyTimeoutTimer;
+  final ValueNotifier<double> _sheetProgressNotifier = ValueNotifier<double>(0.0);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentIndex = widget.initialIndex;
     _previousIndex = widget.initialIndex;
 
@@ -86,8 +90,17 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _safetyTimeoutTimer?.cancel();
+    _sheetProgressNotifier.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      TicketService.instance.checkExpiry();
+    }
   }
 
   void _onTabSelected(int index) {
@@ -101,59 +114,92 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // 1. Основное приложение с картой и нижней панелью
-        Scaffold(
-          backgroundColor: AppColors.bgMain,
-          body: IndexedStack(
-            index: _currentIndex,
-            children: [
-              const NewsScreen(),
-              MapScreen(
-                onSheetVisibilityChanged: (visible) {
-                  if (_isMapSheetVisible != visible && mounted) {
-                    setState(() {
-                      _isMapSheetVisible = visible;
-                    });
-                  }
-                },
-                onMapReady: _onMapReady,
-              ),
-              PaymentQrScreen(
-                isActive: _currentIndex == 2,
-                onBack: () => _onTabSelected(_previousIndex == 2 ? 1 : _previousIndex),
-              ),
-              const ServicesScreen(),
-              const ProfileScreen(),
-            ],
-          ),
-          bottomNavigationBar: VolgaBottomNavBar(
-            currentIndex: _currentIndex,
-            onTap: _onTabSelected,
-          ),
-        ),
+    return ListenableBuilder(
+      listenable: TicketService.instance,
+      builder: (context, _) {
+        final bool showTicketSheet =
+            TicketService.instance.hasActiveTicket && _currentIndex == 1 && !_isMapSheetVisible;
 
-        // 2. Страница загрузки (сплэш), поверх приложения во время старта
-        if (_showSplashOverlay)
-          Positioned.fill(
-            child: AnimatedOpacity(
-              opacity: _isSplashVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              onEnd: () {
-                if (!_isSplashVisible && mounted) {
-                  setState(() {
-                    _showSplashOverlay = false;
-                  });
-                }
-              },
-              child: SplashScreen(
-                onAnimationComplete: _onSplashAnimationDone,
+        return Stack(
+          children: [
+            // 1. Основное приложение с картой и нижней панелью
+            Scaffold(
+              backgroundColor: AppColors.bgMain,
+              body: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  const NewsScreen(),
+                  MapScreen(
+                    onSheetVisibilityChanged: (visible) {
+                      if (_isMapSheetVisible != visible && mounted) {
+                        setState(() {
+                          _isMapSheetVisible = visible;
+                        });
+                      }
+                    },
+                    onMapReady: _onMapReady,
+                  ),
+                  PaymentQrScreen(
+                    isActive: _currentIndex == 2,
+                    onBack: () => _onTabSelected(_previousIndex == 2 ? 1 : _previousIndex),
+                    onPaymentSuccess: () => _onTabSelected(1),
+                  ),
+                  const ServicesScreen(),
+                  const ProfileScreen(),
+                ],
               ),
+              bottomNavigationBar: showTicketSheet
+                  ? null
+                  : VolgaBottomNavBar(
+                      currentIndex: _currentIndex,
+                      onTap: _onTabSelected,
+                    ),
             ),
-          ),
-      ],
+
+            // 2. Раскрывающаяся панель активного билета (строго по res/bilet/pay-ok-mini.webp)
+            // В свернутом виде не перекрывает нижнюю панель навигации, видна шапка "Ваш билет"
+            if (showTicketSheet) ...[
+              VolgaActiveTicketSheet(
+                onProgressChanged: (progress) {
+                  _sheetProgressNotifier.value = progress;
+                },
+              ),
+
+              // 3. Нижняя панель навигации поверх шторки, чтобы выступающая кнопка «Оплата»
+              // оставалась интерактивной и видимой (строго по res/bilet/bilet-ok.webp)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: VolgaBottomNavBar(
+                  currentIndex: _currentIndex,
+                  onTap: _onTabSelected,
+                ),
+              ),
+            ],
+
+            // 3. Страница загрузки (сплэш), поверх приложения во время старта
+            if (_showSplashOverlay)
+              Positioned.fill(
+                child: AnimatedOpacity(
+                  opacity: _isSplashVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  onEnd: () {
+                    if (!_isSplashVisible && mounted) {
+                      setState(() {
+                        _showSplashOverlay = false;
+                      });
+                    }
+                  },
+                  child: SplashScreen(
+                    onAnimationComplete: _onSplashAnimationDone,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

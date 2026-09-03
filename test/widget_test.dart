@@ -42,6 +42,13 @@ void main() {
     expect(find.text('Сканировать QR-код'), findsOneWidget);
     expect(find.text('Наведите камеру на QR-код для оплаты'), findsOneWidget);
 
+    // If insufficient balance dialog (< 40 ₽) appears, verify and close it with OK
+    if (find.text('Ошибка').evaluate().isNotEmpty) {
+      expect(find.text('Недостаточно средств'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+    }
+
     // Tap "Сервисы"
     await tester.tap(find.text('Сервисы'));
     await tester.pumpAndSettle();

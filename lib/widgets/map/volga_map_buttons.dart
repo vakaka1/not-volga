@@ -4,24 +4,26 @@ import '../../theme/app_colors.dart';
 
 class VolgaMapButtons extends StatelessWidget {
   final VoidCallback onFilterTap;
-  final VoidCallback onCenterLocationTap;
+  final VoidCallback onStationsModeTap;
   final VoidCallback onBusModeTap;
   final VoidCallback onZoomInTap;
   final VoidCallback onZoomOutTap;
-  final VoidCallback onCompassTap;
+  final VoidCallback onCenterLocationTap;
   final VoidCallback onBlindModeTap;
   final bool isBusModeActive;
+  final bool isStationsModeActive;
 
   const VolgaMapButtons({
     super.key,
     required this.onFilterTap,
-    required this.onCenterLocationTap,
+    required this.onStationsModeTap,
     required this.onBusModeTap,
     required this.onZoomInTap,
     required this.onZoomOutTap,
-    required this.onCompassTap,
+    required this.onCenterLocationTap,
     required this.onBlindModeTap,
     this.isBusModeActive = true,
+    this.isStationsModeActive = true,
   });
 
   @override
@@ -49,14 +51,14 @@ class VolgaMapButtons extends StatelessWidget {
               ),
               const SizedBox(height: 10),
 
-              // 2. Кнопка центрирования / прицела
+              // 2. Кнопка остановок (круглая кнопка)
               _buildSquareButton(
                 icon: Icons.gps_fixed,
-                onTap: onCenterLocationTap,
+                onTap: onStationsModeTap,
               ),
               const SizedBox(height: 10),
 
-              // 3. Кнопка транспорта (красный автобус)
+              // 3. Кнопка транспорта (автобус: красный когда включен, черный когда выключен)
               _buildBusModeButton(),
               const SizedBox(height: 32),
 
@@ -64,10 +66,10 @@ class VolgaMapButtons extends StatelessWidget {
               _buildZoomControls(),
               const SizedBox(height: 10),
 
-              // 5. Кнопка компаса / навигационной стрелки
+              // 5. Кнопка навигационной стрелки (центрирование на пользователе)
               _buildSquareButton(
                 icon: Icons.navigation,
-                onTap: onCompassTap,
+                onTap: onCenterLocationTap,
                 iconAngle: -0.5,
               ),
             ],
@@ -142,7 +144,7 @@ class VolgaMapButtons extends StatelessWidget {
               AppAssets.icBus,
               width: 24,
               height: 24,
-              color: isBusModeActive ? const Color(0xFFE52929) : Colors.grey,
+              color: isBusModeActive ? const Color(0xFFE52929) : AppColors.black,
             ),
           ),
         ),

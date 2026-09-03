@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
@@ -8,9 +9,11 @@ import '../models/transport/station_arrival_model.dart';
 import '../models/transport/station_model.dart';
 import '../models/transport/vehicle_model.dart';
 import '../services/merlin_transport_service.dart';
+import '../services/ticket_service.dart';
 import '../widgets/map/bus_marker_generator.dart';
 import '../widgets/map/volga_map_buttons.dart';
 import '../widgets/map/volga_route_badge.dart';
+import '../widgets/map/volga_bus_bottom_sheet.dart';
 
 class MapScreen extends StatefulWidget {
   final ValueChanged<bool>? onSheetVisibilityChanged;
@@ -26,7 +29,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   // Центр Твери по умолчанию
   static const Point _tverCenter = Point(latitude: 56.858482, longitude: 35.912284);
 
@@ -52,13 +55,21 @@ class _MapScreenState extends State<MapScreen> {
   StationModel? _selectedStation;
   VehicleModel? _selectedVehicle;
   Set<String> _stationRouteNames = {};
+  Set<int> _stationRouteIds = {};
 
   // Состояние нижней панели
   bool _showBusSheet = false;
   bool _showStationSheet = false;
   bool _isSheetExpanded = false;
+  bool get isSheetExpanded => _isSheetExpanded;
+  bool _isPassedStopsExpanded = false;
+  bool _isRemainingStopsExpanded = false;
   List<StationArrivalModel> _stationArrivals = [];
   bool _isLoadingArrivals = false;
+
+  // Контроллеры плавной анимации выдвижной панели
+  late final AnimationController _sheetVisibilityController;
+  late final AnimationController _sheetExpandController;
 
   // Реальная геопозиция и направление пользователя
   Point? _userLocation;
@@ -77,9 +88,21 @@ class _MapScreenState extends State<MapScreen> {
   // Флаг загрузки остановок из сети
   bool _stationsLoaded = false;
 
+  // Видимость автобусов и остановок
+  bool _showBuses = true;
+  bool _showStations = true;
+
   @override
   void initState() {
     super.initState();
+    _sheetVisibilityController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _sheetExpandController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
     _initBusMarkerGenerator();
     _initData();
     _startLiveVehiclesPolling();
@@ -90,6 +113,8 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _positionStreamSub?.cancel();
     _pollingTimer?.cancel();
+    _sheetVisibilityController.dispose();
+    _sheetExpandController.dispose();
     super.dispose();
   }
 
@@ -199,12 +224,24 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Кнопка центрирования на пользователе (запрашивает права при необходимости и двигает камеру)
+  /// Кнопка центрирования на пользователе (стрелка)
   Future<void> _centerOnUserLocation() async {
+    // 1. Если координаты уже известны, мгновенно анимируем камеру туда
+    if (_userLocation != null) {
+      _mapController?.moveCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _userLocation!, zoom: 16.5),
+        ),
+        animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.6),
+      );
+    }
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        await Geolocator.openLocationSettings();
+        if (_userLocation == null) {
+          await Geolocator.openLocationSettings();
+        }
         return;
       }
 
@@ -214,7 +251,9 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        await Geolocator.openAppSettings();
+        if (_userLocation == null) {
+          await Geolocator.openAppSettings();
+        }
         return;
       }
 
@@ -222,7 +261,7 @@ class _MapScreenState extends State<MapScreen> {
         final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.best,
-            timeLimit: Duration(seconds: 6),
+            timeLimit: Duration(seconds: 5),
           ),
         );
         final userPt = Point(latitude: pos.latitude, longitude: pos.longitude);
@@ -233,25 +272,56 @@ class _MapScreenState extends State<MapScreen> {
               _userHeading = pos.heading;
             }
           });
-        }
 
-        _mapController?.moveCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(target: userPt, zoom: 16.5),
-          ),
-          animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
-        );
+          _mapController?.moveCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(target: userPt, zoom: 16.5),
+            ),
+            animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+          );
+        }
         return;
       }
     } catch (_) {}
 
-    final target = _userLocation ?? _tverCenter;
-    _mapController?.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: target, zoom: 16.0),
-      ),
-      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
-    );
+    if (_userLocation == null) {
+      _mapController?.moveCamera(
+        CameraUpdate.newCameraPosition(
+          const CameraPosition(target: _tverCenter, zoom: 16.0),
+        ),
+        animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+      );
+    }
+  }
+
+  /// Переключение отображения автобусов на карте
+  void _toggleBusMode() {
+    setState(() {
+      _showBuses = !_showBuses;
+      if (!_showBuses && _showBusSheet) {
+        _closeAnySheet();
+      }
+    });
+    if (_showBuses) {
+      _fetchLiveVehicles();
+    }
+  }
+
+  /// Переключение отображения остановок на карте
+  void _toggleStationsMode() {
+    setState(() {
+      _showStations = !_showStations;
+      if (!_showStations && _showStationSheet) {
+        _closeAnySheet();
+      }
+    });
+    if (_showStations) {
+      if (!_stationsLoaded) {
+        _loadStationsFromNetwork();
+      } else {
+        _updateVisibleStations();
+      }
+    }
   }
 
   // ───────────────────────────── 2. ЗАГРУЗКА ДАННЫХ ─────────────────────────────
@@ -351,32 +421,91 @@ class _MapScreenState extends State<MapScreen> {
   // ───────────────────────────── 3. ЗАКРЫТИЕ И ВЫБОР ОБЪЕКТОВ ─────────────────────────────
 
   void _closeAnySheet() {
-    if (!_showBusSheet && !_showStationSheet) return;
-    setState(() {
-      _showBusSheet = false;
-      _showStationSheet = false;
-      _isSheetExpanded = false;
-      _selectedStation = null;
-      _selectedVehicle = null;
-      _stationRouteNames = {};
-      _activeRoutePath = [];
-      _activeRouteDetails = null;
-      _stationArrivals = [];
+    if (!_showBusSheet && !_showStationSheet && _sheetVisibilityController.value == 0) return;
+    _sheetVisibilityController.reverse().then((_) {
+      if (mounted) {
+        setState(() {
+          _showBusSheet = false;
+          _showStationSheet = false;
+          _isSheetExpanded = false;
+          _isPassedStopsExpanded = false;
+          _isRemainingStopsExpanded = false;
+          _selectedStation = null;
+          _selectedVehicle = null;
+          _stationRouteNames = {};
+          _stationRouteIds = {};
+          _activeRoutePath = [];
+          _activeRouteDetails = null;
+          _stationArrivals = [];
+        });
+        _sheetExpandController.value = 0.0;
+        widget.onSheetVisibilityChanged?.call(false);
+      }
     });
-    widget.onSheetVisibilityChanged?.call(false);
+  }
+
+  void _toggleOrExpandSheet() {
+    if (_sheetExpandController.value > 0.5) {
+      _sheetExpandController.animateTo(0.0, curve: Curves.easeInOutCubic, duration: const Duration(milliseconds: 260));
+      setState(() => _isSheetExpanded = false);
+    } else {
+      _sheetExpandController.animateTo(1.0, curve: Curves.easeInOutCubic, duration: const Duration(milliseconds: 260));
+      setState(() => _isSheetExpanded = true);
+    }
+  }
+
+  void _handleVerticalDragUpdate(DragUpdateDetails details, double minH, double maxH) {
+    final double range = maxH - minH;
+    if (range <= 0) return;
+    final double deltaFraction = details.primaryDelta! / range;
+    _sheetExpandController.value = (_sheetExpandController.value - deltaFraction).clamp(0.0, 1.0);
+  }
+
+  void _handleVerticalDragEnd(DragEndDetails details) {
+    final double velocity = details.primaryVelocity ?? 0.0;
+    if (velocity > 600) {
+      // Быстрый свайп вниз
+      if (_sheetExpandController.value < 0.25) {
+        _closeAnySheet();
+      } else {
+        _sheetExpandController.animateTo(0.0, curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 220));
+        setState(() => _isSheetExpanded = false);
+      }
+    } else if (velocity < -600) {
+      // Быстрый свайп вверх
+      _sheetExpandController.animateTo(1.0, curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 220));
+      setState(() => _isSheetExpanded = true);
+    } else {
+      if (_sheetExpandController.value > 0.45) {
+        _sheetExpandController.animateTo(1.0, curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 200));
+        setState(() => _isSheetExpanded = true);
+      } else {
+        _sheetExpandController.animateTo(0.0, curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 200));
+        setState(() => _isSheetExpanded = false);
+      }
+    }
   }
 
   Future<void> _onVehicleTap(VehicleModel vehicle) async {
+    final bool wasOpen = _showStationSheet || _showBusSheet || _sheetVisibilityController.value > 0;
     setState(() {
       _selectedVehicle = vehicle;
       _selectedStation = null;
       _stationRouteNames = {};
+      _stationRouteIds = {};
       _showStationSheet = false;
       _showBusSheet = true;
-      _isSheetExpanded = false;
+      _isPassedStopsExpanded = false;
+      _isRemainingStopsExpanded = false;
       _stationArrivals = [];
     });
     widget.onSheetVisibilityChanged?.call(true);
+
+    if (!wasOpen) {
+      _sheetExpandController.value = 0.0;
+      _isSheetExpanded = false;
+      _sheetVisibilityController.forward(from: 0.0);
+    }
 
     // Генерируем выбранный маркер (с номером маршрута)
     final selKey = '${vehicle.vehicleId}_${vehicle.course.toInt()}_true';
@@ -415,18 +544,26 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _onStationTap(StationModel station) async {
+    final bool wasOpen = _showStationSheet || _showBusSheet || _sheetVisibilityController.value > 0;
     setState(() {
       _selectedStation = station;
       _selectedVehicle = null;
       _showBusSheet = false;
       _showStationSheet = true;
-      _isSheetExpanded = false;
       _isLoadingArrivals = true;
       _stationArrivals = [];
+      _stationRouteNames = {};
+      _stationRouteIds = {};
       _activeRoutePath = [];
       _activeRouteDetails = null;
     });
     widget.onSheetVisibilityChanged?.call(true);
+
+    if (!wasOpen) {
+      _sheetExpandController.value = 0.0;
+      _isSheetExpanded = false;
+      _sheetVisibilityController.forward(from: 0.0);
+    }
 
     final Map<String, String> vehicleLicenseByRoute = {};
     for (final v in _allVehicles) {
@@ -440,41 +577,249 @@ class _MapScreenState extends State<MapScreen> {
       vehicleLicenseByRoute: vehicleLicenseByRoute,
     );
 
+    // Сортировка: сверху ближайшие, ниже — которые будут позже
+    arrivals.sort((a, b) {
+      final aTime = a.estimatedArrivals.isNotEmpty ? a.estimatedArrivals.first : null;
+      final bTime = b.estimatedArrivals.isNotEmpty ? b.estimatedArrivals.first : null;
+      if (aTime != null && bTime != null) {
+        return aTime.compareTo(bTime);
+      } else if (aTime != null) {
+        return -1;
+      } else if (bTime != null) {
+        return 1;
+      }
+      return a.routeName.compareTo(b.routeName);
+    });
+
     if (mounted) {
       setState(() {
         _stationArrivals = arrivals;
         _isLoadingArrivals = false;
-        _stationRouteNames = arrivals.map((a) => a.routeName).toSet();
+        _stationRouteNames = arrivals.map((a) => a.routeName).where((n) => n.isNotEmpty).toSet();
+        _stationRouteIds = arrivals.map((a) => a.routeId).where((id) => id != 0).toSet();
       });
     }
   }
 
-  void _onRouteSelectedFromStation(StationArrivalModel selectedArrival) {
-    final stationLat = _selectedStation?.lat ?? _tverCenter.latitude;
-    final stationLng = _selectedStation?.lng ?? _tverCenter.longitude;
-
+  Future<void> _onRouteSelectedFromStation(StationArrivalModel selectedArrival) async {
+    // 1. Ищем живой автобус для этого рейса/маршрута
     VehicleModel? targetVehicle;
-    for (final v in _allVehicles) {
-      if (v.routeName == selectedArrival.routeName) {
-        targetVehicle = v;
-        break;
+
+    // 1.1 По точному совпадению госномера среди уже загруженных автобусов
+    if (selectedArrival.licenseNumber != null && selectedArrival.licenseNumber!.trim().isNotEmpty) {
+      final cleanTargetLic = selectedArrival.licenseNumber!.replaceAll(' ', '').toUpperCase();
+      for (final v in _allVehicles) {
+        final cleanVLic = v.licenseNumber.replaceAll(' ', '').toUpperCase();
+        if (cleanVLic.isNotEmpty &&
+            (cleanVLic == cleanTargetLic || cleanVLic.contains(cleanTargetLic) || cleanTargetLic.contains(cleanVLic))) {
+          targetVehicle = v;
+          break;
+        }
       }
     }
 
-    targetVehicle ??= VehicleModel(
-      vehicleId: '${selectedArrival.routeId * 100 + 1}',
-      boardNumber: '1001',
-      model: 'ЛиАЗ 429260',
-      routeId: selectedArrival.routeId,
-      routeName: selectedArrival.routeName,
-      licenseNumber: selectedArrival.licenseNumber ?? 'Н 756 СР 69',
-      lat: stationLat + 0.002,
-      lng: stationLng + 0.002,
-      course: 45.0,
-      hasWheelchair: selectedArrival.hasWheelchair,
-    );
+    // 1.2 По номеру маршрута (routeName) или routeId
+    if (targetVehicle == null) {
+      final matching = _allVehicles.where((v) =>
+          (v.routeName.isNotEmpty && v.routeName == selectedArrival.routeName) ||
+          (selectedArrival.routeId != 0 && v.routeId == selectedArrival.routeId)).toList();
 
-    _onVehicleTap(targetVehicle);
+      if (matching.isNotEmpty) {
+        final stationLat = _selectedStation?.lat;
+        final stationLng = _selectedStation?.lng;
+        if (stationLat != null && stationLng != null) {
+          matching.sort((a, b) {
+            final distA = (a.lat - stationLat) * (a.lat - stationLat) + (a.lng - stationLng) * (a.lng - stationLng);
+            final distB = (b.lat - stationLat) * (b.lat - stationLat) + (b.lng - stationLng) * (b.lng - stationLng);
+            return distA.compareTo(distB);
+          });
+        }
+        targetVehicle = matching.first;
+      }
+    }
+
+    // 1.3 Если в текущей области не найден, пробуем загрузить живые автобусы по всей Твери
+    if (targetVehicle == null) {
+      try {
+        final cityVehicles = await _transportService.getVehicles(
+          topLat: 56.98,
+          bottomLat: 56.72,
+          leftLng: 35.65,
+          rightLng: 36.15,
+        );
+        if (cityVehicles.isNotEmpty) {
+          _allVehicles = cityVehicles;
+          if (selectedArrival.licenseNumber != null && selectedArrival.licenseNumber!.trim().isNotEmpty) {
+            final cleanTargetLic = selectedArrival.licenseNumber!.replaceAll(' ', '').toUpperCase();
+            for (final v in cityVehicles) {
+              final cleanVLic = v.licenseNumber.replaceAll(' ', '').toUpperCase();
+              if (cleanVLic.isNotEmpty &&
+                  (cleanVLic == cleanTargetLic || cleanVLic.contains(cleanTargetLic) || cleanTargetLic.contains(cleanVLic))) {
+                targetVehicle = v;
+                break;
+              }
+            }
+          }
+          if (targetVehicle == null) {
+            final matching = cityVehicles.where((v) =>
+                (v.routeName.isNotEmpty && v.routeName == selectedArrival.routeName) ||
+                (selectedArrival.routeId != 0 && v.routeId == selectedArrival.routeId)).toList();
+            if (matching.isNotEmpty) {
+              final stationLat = _selectedStation?.lat;
+              final stationLng = _selectedStation?.lng;
+              if (stationLat != null && stationLng != null) {
+                matching.sort((a, b) {
+                  final distA = (a.lat - stationLat) * (a.lat - stationLat) + (a.lng - stationLng) * (a.lng - stationLng);
+                  final distB = (b.lat - stationLat) * (b.lat - stationLat) + (b.lng - stationLng) * (b.lng - stationLng);
+                  return distA.compareTo(distB);
+                });
+              }
+              targetVehicle = matching.first;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Загружаем геометрию (трек) маршрута и детальную информацию со списком остановок
+    final routeId = targetVehicle?.routeId ?? selectedArrival.routeId;
+    final path = await _transportService.getRoutePath(routeId);
+    final details = await _transportService.getRouteDetails(routeId);
+
+    if (!mounted) return;
+
+    // 3. Заменяем нижнюю панель остановки на панель автобуса
+    _sheetExpandController.value = 0.0;
+    _isSheetExpanded = false;
+
+    if (targetVehicle != null) {
+      // ── АВТОБУС НАЙДЕН ──
+      // Камеру перемещаем к этому автобусу и центрируем
+      setState(() {
+        _selectedVehicle = targetVehicle;
+        _selectedStation = null;
+        _showStationSheet = false;
+        _showBusSheet = true;
+        _stationArrivals = [];
+        _stationRouteNames = {};
+        _stationRouteIds = {};
+        _activeRoutePath = path;
+        _activeRouteDetails = details;
+        _showBuses = true;
+      });
+      widget.onSheetVisibilityChanged?.call(true);
+
+      final selKey = '${targetVehicle.vehicleId}_${targetVehicle.course.toInt()}_true';
+      if (!_busMarkerCache.containsKey(selKey)) {
+        final marker = await BusMarkerGenerator.getBusMarker(
+          course: targetVehicle.course,
+          routeName: targetVehicle.routeName,
+          isSelected: true,
+        );
+        if (mounted) {
+          setState(() {
+            _busMarkerCache[selKey] = marker;
+          });
+        }
+      }
+
+      _mapController?.moveCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: Point(latitude: targetVehicle.lat, longitude: targetVehicle.lng),
+            zoom: 16.5,
+          ),
+        ),
+        animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+      );
+    } else {
+      // ── АВТОБУС НАЙТИ НЕВОЗМОЖНО ──
+      // Отдаляем и центрируем маршрут, панель остановки заменяем на панель автобуса
+      final fallbackVehicle = VehicleModel(
+        vehicleId: 'route_${selectedArrival.routeId}',
+        boardNumber: '',
+        model: '',
+        routeId: selectedArrival.routeId,
+        routeName: selectedArrival.routeName,
+        licenseNumber: selectedArrival.licenseNumber ?? '',
+        lat: 0.0,
+        lng: 0.0,
+        hasWheelchair: selectedArrival.hasWheelchair,
+      );
+
+      setState(() {
+        _selectedVehicle = fallbackVehicle;
+        _selectedStation = null;
+        _showStationSheet = false;
+        _showBusSheet = true;
+        _stationArrivals = [];
+        _stationRouteNames = {};
+        _stationRouteIds = {};
+        _activeRoutePath = path;
+        _activeRouteDetails = details;
+      });
+      widget.onSheetVisibilityChanged?.call(true);
+
+      // Собираем точки маршрута для вычисления охвата (bounding box)
+      List<Point> routePoints = [];
+      if (path.isNotEmpty) {
+        routePoints = path.map((p) => Point(latitude: p.lat, longitude: p.lng)).toList();
+      } else if (details?.stations.isNotEmpty == true) {
+        routePoints = details!.stations
+            .where((s) => s.lat != 0.0 && s.lng != 0.0)
+            .map((s) => Point(latitude: s.lat, longitude: s.lng))
+            .toList();
+      }
+
+      if (routePoints.isNotEmpty) {
+        double minLat = 90.0, maxLat = -90.0;
+        double minLng = 180.0, maxLng = -180.0;
+        for (final pt in routePoints) {
+          if (pt.latitude < minLat) minLat = pt.latitude;
+          if (pt.latitude > maxLat) maxLat = pt.latitude;
+          if (pt.longitude < minLng) minLng = pt.longitude;
+          if (pt.longitude > maxLng) maxLng = pt.longitude;
+        }
+
+        final latSpan = (maxLat - minLat).abs();
+        final lngSpan = (maxLng - minLng).abs();
+        final maxSpan = math.max(latSpan, lngSpan);
+        final centerLat = (minLat + maxLat) / 2;
+        final centerLng = (minLng + maxLng) / 2;
+
+        // Рассчитываем зум так, чтобы весь маршрут поместился целиком
+        double routeZoom = 12.2;
+        if (maxSpan > 0.22) {
+          routeZoom = 10.8;
+        } else if (maxSpan > 0.16) {
+          routeZoom = 11.3;
+        } else if (maxSpan > 0.10) {
+          routeZoom = 11.8;
+        } else if (maxSpan > 0.06) {
+          routeZoom = 12.3;
+        } else {
+          routeZoom = 13.0;
+        }
+
+        // Сдвигаем центр немного южнее, чтобы маршрут был идеально виден над открытой шторкой
+        final targetLat = centerLat - latSpan * 0.15;
+        final targetCenter = Point(latitude: targetLat, longitude: centerLng);
+
+        _mapController?.moveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: targetCenter, zoom: routeZoom),
+          ),
+          animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+        );
+      } else {
+        _mapController?.moveCamera(
+          CameraUpdate.newCameraPosition(
+            const CameraPosition(target: _tverCenter, zoom: 12.0),
+          ),
+          animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.8),
+        );
+      }
+    }
   }
 
   // ───────────────────────────── 4. ОБЪЕКТЫ НА КАРТЕ ─────────────────────────────
@@ -498,61 +843,96 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
-    // 2. Маркеры остановок (только если загружены из сети)
-    for (final station in _visibleStations) {
-      final isSelected = _selectedStation?.stationId == station.stationId;
-      objects.add(
-        PlacemarkMapObject(
-          mapId: MapObjectId('station_${station.stationId}'),
-          point: Point(latitude: station.lat, longitude: station.lng),
-          icon: PlacemarkIcon.single(
-            PlacemarkIconStyle(
-              image: isSelected ? _selectedStationIcon : _stationIcon,
-              scale: isSelected ? 0.25 : 0.24,
+    // 2. Маркеры остановок (только если включены и загружены из сети)
+    if (_showStations) {
+      for (final station in _visibleStations) {
+        final isSelected = _selectedStation?.stationId == station.stationId;
+        objects.add(
+          PlacemarkMapObject(
+            mapId: MapObjectId('station_${station.stationId}'),
+            point: Point(latitude: station.lat, longitude: station.lng),
+            icon: PlacemarkIcon.single(
+              PlacemarkIconStyle(
+                image: isSelected ? _selectedStationIcon : _stationIcon,
+                scale: isSelected ? 0.25 : 0.24,
+              ),
             ),
+            opacity: 1.0,
+            onTap: (PlacemarkMapObject self, Point point) => _onStationTap(station),
           ),
-          opacity: 1.0,
-          onTap: (PlacemarkMapObject self, Point point) => _onStationTap(station),
-        ),
-      );
+        );
+      }
     }
 
-    // 3. Маркеры автобусов
+    // 3. Маркеры автобусов (только если включены)
     // Рисуются через сгенерированный Canvas: синяя капля повернута по курсу, белый автобус ВСЕГДА стоит ровно!
     // При выборе автобуса добавляется плашка с номером маршрута справа (по res/bus.webp).
-    final displayVehicles = _stationRouteNames.isNotEmpty
-        ? _allVehicles.where((v) => _stationRouteNames.contains(v.routeName)).toList()
-        : _allVehicles;
+    if (_showBuses) {
+      final List<VehicleModel> displayVehicles;
 
-    for (final vehicle in displayVehicles) {
-      final isSelected = _selectedVehicle?.vehicleId == vehicle.vehicleId;
-      final key = '${vehicle.vehicleId}_${vehicle.course.toInt()}_$isSelected';
-      final cachedIcon = _busMarkerCache[key] ??
-          BusMarkerGenerator.getCachedMarker(
-            course: vehicle.course,
-            routeName: vehicle.routeName,
-            isSelected: isSelected,
-          );
+      if (_selectedVehicle != null && _showBusSheet) {
+        // ── 2. ВЫБРАН АВТОБУС ──
+        // На карте должны быть ТОЛЬКО автобусы этого маршрута
+        displayVehicles = _allVehicles.where((v) {
+          final matchesName = v.routeName.isNotEmpty && v.routeName == _selectedVehicle!.routeName;
+          final matchesId = _selectedVehicle!.routeId != 0 && v.routeId == _selectedVehicle!.routeId;
+          return matchesName || matchesId;
+        }).toList();
 
-      // Если иконка еще в процессе генерации, показываем базовый маркер
-      final iconDescriptor = cachedIcon ?? BitmapDescriptor.fromAssetImage('assets/icons/ic_routes_blue.png');
+        // Если выбранный автобус имеет координаты, но его нет в списке (например, загружен по городу), добавляем его
+        if (_selectedVehicle!.lat != 0.0 &&
+            _selectedVehicle!.lng != 0.0 &&
+            !displayVehicles.any((v) => v.vehicleId == _selectedVehicle!.vehicleId)) {
+          displayVehicles.add(_selectedVehicle!);
+        }
+      } else if (_selectedStation != null && _showStationSheet) {
+        // ── 3. ВЫБРАНА ОСТАНОВКА ──
+        // На карте показываются ТОЛЬКО автобусы, релевантные этой остановке
+        if (_isLoadingArrivals && _stationRouteNames.isEmpty && _stationRouteIds.isEmpty) {
+          displayVehicles = [];
+        } else {
+          displayVehicles = _allVehicles.where((v) {
+            final matchesName = v.routeName.isNotEmpty && _stationRouteNames.contains(v.routeName);
+            final matchesId = v.routeId != 0 && _stationRouteIds.contains(v.routeId);
+            return matchesName || matchesId;
+          }).toList();
+        }
+      } else {
+        // ── ОБЫЧНЫЙ РЕЖИМ ──
+        // Показываем все видимые автобусы
+        displayVehicles = _allVehicles;
+      }
 
-      objects.add(
-        PlacemarkMapObject(
-          mapId: MapObjectId('bus_${vehicle.vehicleId}'),
-          point: Point(latitude: vehicle.lat, longitude: vehicle.lng),
-          icon: PlacemarkIcon.single(
-            PlacemarkIconStyle(
-              image: iconDescriptor,
-              scale: isSelected ? 0.65 : 0.52,
-              rotationType: RotationType.noRotation, // Поворот выполнен в Canvas!
-              anchor: isSelected ? const Offset(0.35, 0.5) : const Offset(0.5, 0.5),
+      for (final vehicle in displayVehicles) {
+        final isSelected = _selectedVehicle?.vehicleId == vehicle.vehicleId;
+        final key = '${vehicle.vehicleId}_${vehicle.course.toInt()}_$isSelected';
+        final cachedIcon = _busMarkerCache[key] ??
+            BusMarkerGenerator.getCachedMarker(
+              course: vehicle.course,
+              routeName: vehicle.routeName,
+              isSelected: isSelected,
+            );
+
+        // Если иконка еще в процессе генерации, показываем базовый маркер
+        final iconDescriptor = cachedIcon ?? BitmapDescriptor.fromAssetImage('assets/icons/ic_routes_blue.png');
+
+        objects.add(
+          PlacemarkMapObject(
+            mapId: MapObjectId('bus_${vehicle.vehicleId}'),
+            point: Point(latitude: vehicle.lat, longitude: vehicle.lng),
+            icon: PlacemarkIcon.single(
+              PlacemarkIconStyle(
+                image: iconDescriptor,
+                scale: isSelected ? 0.65 : 0.52,
+                rotationType: RotationType.noRotation, // Поворот выполнен в Canvas!
+                anchor: isSelected ? const Offset(0.35, 0.5) : const Offset(0.5, 0.5),
+              ),
             ),
+            opacity: 1.0,
+            onTap: (PlacemarkMapObject self, Point point) => _onVehicleTap(vehicle),
           ),
-          opacity: 1.0,
-          onTap: (PlacemarkMapObject self, Point point) => _onVehicleTap(vehicle),
-        ),
-      );
+        );
+      }
     }
 
     // 4. Реальный маркер геопозиции пользователя с направлением (куда смотрит!)
@@ -582,9 +962,10 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool anySheetOpen = _showBusSheet || _showStationSheet;
+    final bool anySheetOpen = _showBusSheet || _showStationSheet || _sheetVisibilityController.value > 0;
     final screenHeight = MediaQuery.of(context).size.height;
-    final double sheetHeight = _isSheetExpanded ? screenHeight * 0.85 : screenHeight * 0.40;
+    final double collapsedHeight = screenHeight * 0.34;
+    final double expandedHeight = screenHeight * 0.86;
 
     return Scaffold(
       backgroundColor: const Color(0xFFE8ECEF),
@@ -624,8 +1005,8 @@ class _MapScreenState extends State<MapScreen> {
           SafeArea(
             child: VolgaMapButtons(
               onFilterTap: () {},
-              onCenterLocationTap: _centerOnUserLocation, // Активная кнопка центрирования
-              onBusModeTap: () {},
+              onStationsModeTap: _toggleStationsMode,
+              onBusModeTap: _toggleBusMode,
               onZoomInTap: () {
                 _mapController?.moveCamera(
                   CameraUpdate.zoomIn(),
@@ -638,78 +1019,99 @@ class _MapScreenState extends State<MapScreen> {
                   animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.3),
                 );
               },
-              onCompassTap: () {},
+              onCenterLocationTap: _centerOnUserLocation,
               onBlindModeTap: () {},
-              isBusModeActive: true,
+              isBusModeActive: _showBuses,
+              isStationsModeActive: _showStations,
             ),
           ),
 
           // 3. Плавающая белая кнопка «Построить маршрут» (прячется при открытой панели)
           if (!anySheetOpen)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 2)),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {},
-                    child: const Center(
-                      child: Text(
-                        'Построить маршрут',
-                        style: TextStyle(
-                          fontFamily: 'NotoSans',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xFF1E1E1E),
-                          letterSpacing: 0.2,
+            ListenableBuilder(
+              listenable: TicketService.instance,
+              builder: (context, _) {
+                final hasTicket = TicketService.instance.hasActiveTicket;
+                final bottomPadding = MediaQuery.of(context).padding.bottom;
+                // When ticket is active, nav bar (56 + bottomPadding) + ticket header (54) + 16dp spacing
+                final double bottomOffset = hasTicket
+                    ? (56.0 + bottomPadding + 54.0 + 16.0)
+                    : 16.0;
+
+                return Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: bottomOffset,
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {},
+                        child: const Center(
+                          child: Text(
+                            'Построить маршрут',
+                            style: TextStyle(
+                              fontFamily: 'NotoSans',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF1E1E1E),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
+                );
+              },
+            ),
+
+          // 4 & 5. Плавная выдвигающаяся панель (Остановка или Автобус)
+          AnimatedBuilder(
+            animation: Listenable.merge([_sheetVisibilityController, _sheetExpandController]),
+            builder: (context, child) {
+              final bool isSheetActive = _sheetVisibilityController.value > 0 || _showStationSheet || _showBusSheet;
+              if (!isSheetActive) return const SizedBox.shrink();
+
+              final double currentHeight = collapsedHeight + (expandedHeight - collapsedHeight) * _sheetExpandController.value;
+
+              Widget content;
+              if (_showStationSheet && _selectedStation != null) {
+                content = _buildStationPanel(collapsedHeight, expandedHeight);
+              } else if (_showBusSheet && _selectedVehicle != null) {
+                content = _buildBusPanel(collapsedHeight, expandedHeight);
+              } else {
+                content = const SizedBox.shrink();
+              }
+
+              return Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: currentHeight,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: _sheetVisibilityController,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  )),
+                  child: content,
                 ),
-              ),
-            ),
-
-          // 4. Выдвигающаяся панель ОСТАНОВКИ
-          // - Без скруглений!
-          // - Без полоски/линии сверху!
-          // - Заголовок ФИКСИРОВАН (не скроллится)!
-          // - Скроллятся ТОЛЬКО маршруты!
-          // - Кнопка крестика для закрытия + свайп вниз!
-          if (_showStationSheet && _selectedStation != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: sheetHeight,
-              child: _buildStationPanel(),
-            ),
-
-          // 5. Выдвигающаяся панель АВТОБУСА
-          // - Без скруглений!
-          // - Без полоски/линии сверху!
-          // - Раскрывается по нажатию на остановки (как и остановка)!
-          // - Заголовок ФИКСИРОВАН, скроллятся ТОЛЬКО остановки!
-          // - Кнопка крестика для закрытия + свайп вниз!
-          if (_showBusSheet && _selectedVehicle != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: sheetHeight,
-              child: _buildBusPanel(),
-            ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -717,45 +1119,31 @@ class _MapScreenState extends State<MapScreen> {
 
   // ───────────────────────────── ПАНЕЛЬ ОСТАНОВКИ ─────────────────────────────
 
-  Widget _buildStationPanel() {
+  Widget _buildStationPanel(double collapsedHeight, double expandedHeight) {
     final station = _selectedStation!;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+    return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        // БЕЗ СКРУГЛЕНИЙ (ровный прямоугольник, как в оригинале)
         boxShadow: [
           BoxShadow(
-            color: Color(0x2E000000),
-            blurRadius: 16,
-            offset: Offset(0, -4),
+            color: Color(0x1F000000),
+            blurRadius: 14,
+            offset: Offset(0, -3),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── ФИКСИРОВАННЫЙ ЗАГОЛОВОК (НЕ СКРОЛЛИТСЯ НИКОГДА!) ──
+          // ── ФИКСИРОВАННЫЙ ЗАГОЛОВОК (НЕ СКРОЛЛИТСЯ, ПЛАВНО ПЕРЕТАСКИВАЕТСЯ) ──
           GestureDetector(
-            onVerticalDragUpdate: (details) {
-              if (details.primaryDelta != null) {
-                if (details.primaryDelta! < -10 && !_isSheetExpanded) {
-                  setState(() => _isSheetExpanded = true);
-                } else if (details.primaryDelta! > 10 && _isSheetExpanded) {
-                  setState(() => _isSheetExpanded = false);
-                }
-              }
-            },
-            onVerticalDragEnd: (details) {
-              if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
-                _closeAnySheet();
-              }
-            },
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (details) => _handleVerticalDragUpdate(details, collapsedHeight, expandedHeight),
+            onVerticalDragEnd: _handleVerticalDragEnd,
             child: Container(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -765,103 +1153,148 @@ class _MapScreenState extends State<MapScreen> {
                     'Остановка',
                     style: TextStyle(
                       fontFamily: 'NotoSans',
-                      fontSize: 15,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w400,
-                      color: Color(0xFF707070),
+                      color: Color(0xFF1E1E1E),
                     ),
                   ),
                   const SizedBox(height: 2),
 
-                  // Название остановки (крупный жирный заголовок)
+                  // Название остановки (аккуратный заголовок, точно по оригиналу)
                   Text(
                     station.name,
                     style: const TextStyle(
                       fontFamily: 'NotoSans',
-                      fontSize: 28,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF111111),
                       height: 1.15,
+                      letterSpacing: -0.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
 
                   // Адрес
                   Text(
-                    station.address.isNotEmpty ? station.address : 'Тверь, Советская улица',
+                    station.address.isNotEmpty ? station.address : 'Тверь, улица Дарвина',
                     style: const TextStyle(
                       fontFamily: 'NotoSans',
-                      fontSize: 15,
-                      color: Color(0xFF707070),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF8E8E93),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 13),
 
-                  // Большая синяя кнопка "Посмотреть расписание"
+                  // Синяя кнопка "Посмотреть расписание" (скругление 16, высота 44)
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: 44,
                     child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _isSheetExpanded = !_isSheetExpanded;
-                        });
-                      },
+                      onPressed: _toggleOrExpandSheet,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0052FF),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                        padding: EdgeInsets.zero,
                       ),
-                      child: Text(
-                        _isSheetExpanded ? 'Свернуть' : 'Посмотреть расписание',
-                        style: const TextStyle(
+                      child: const Text(
+                        'Посмотреть расписание',
+                        style: TextStyle(
                           fontFamily: 'NotoSans',
-                          fontSize: 17,
+                          fontSize: 15.5,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  const Divider(color: Color(0xFFE8EAEF), height: 1, thickness: 1),
+                  const SizedBox(height: 13),
+                  const Divider(color: Color(0xFFEDEDED), height: 1, thickness: 1),
                 ],
               ),
             ),
           ),
 
-          // ── СКРОЛЛЯТСЯ ТОЛЬКО МАРШРУТЫ! ──
-          Expanded(
-            child: _isLoadingArrivals && _stationArrivals.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0052FF)),
-                    ),
-                  )
-                : _stationArrivals.isEmpty
+          // ── СКРОЛЛЯТСЯ ТОЛЬКО МАРШРУТЫ НА БЛИЖАЙШИЙ ЧАС! ──
+          Builder(
+            builder: (context) {
+              final visibleArrivals = _stationArrivals.where((a) {
+                final mins = a.minutesToFirstArrival;
+                return mins != null && mins <= 60;
+              }).toList();
+
+              return Expanded(
+                child: _isLoadingArrivals && visibleArrivals.isEmpty
                     ? const Center(
-                        child: Text(
-                          'Нет данных о ближайших рейсах',
-                          style: TextStyle(
-                            fontFamily: 'NotoSans',
-                            fontSize: 14,
-                            color: Color(0xFF9E9E9E),
-                          ),
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0052FF)),
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        itemCount: _stationArrivals.length,
-                        separatorBuilder: (context, index) =>
-                            const Divider(color: Color(0xFFE8EAEF), height: 1, thickness: 1),
-                        itemBuilder: (context, index) {
-                          final item = _stationArrivals[index];
-                          return _buildArrivalItem(item);
-                        },
-                      ),
+                    : visibleArrivals.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Нет данных о ближайших рейсах на этот час',
+                              style: TextStyle(
+                                fontFamily: 'NotoSans',
+                                fontSize: 14,
+                                color: Color(0xFF9E9E9E),
+                              ),
+                            ),
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (notification is ScrollUpdateNotification) {
+                                if (_sheetExpandController.value < 1.0 && notification.scrollDelta != null) {
+                                  final double range = expandedHeight - collapsedHeight;
+                                  if (range > 0) {
+                                    _sheetExpandController.value =
+                                        (_sheetExpandController.value + (notification.scrollDelta! / range)).clamp(0.0, 1.0);
+                                  }
+                                }
+                              } else if (notification is OverscrollNotification) {
+                                if (notification.overscroll < 0) {
+                                  final double range = expandedHeight - collapsedHeight;
+                                  if (range > 0) {
+                                    _sheetExpandController.value =
+                                        (_sheetExpandController.value + (notification.overscroll / range)).clamp(0.0, 1.0);
+                                  }
+                                }
+                              } else if (notification is ScrollEndNotification) {
+                                if (_sheetExpandController.value > 0.0 && _sheetExpandController.value < 1.0) {
+                                  if (_sheetExpandController.value > 0.45) {
+                                    _sheetExpandController.animateTo(1.0,
+                                        curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 200));
+                                    setState(() => _isSheetExpanded = true);
+                                  } else {
+                                    _sheetExpandController.animateTo(0.0,
+                                        curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 200));
+                                    setState(() => _isSheetExpanded = false);
+                                  }
+                                }
+                              }
+                              return false;
+                            },
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              physics: const ClampingScrollPhysics(),
+                              itemCount: visibleArrivals.length,
+                              separatorBuilder: (context, index) => const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 18),
+                                child: Divider(color: Color(0xFFEDEDED), height: 1, thickness: 1),
+                              ),
+                              itemBuilder: (context, index) {
+                                final item = visibleArrivals[index];
+                                return _buildArrivalItem(item);
+                              },
+                            ),
+                          ),
+              );
+            },
           ),
         ],
       ),
@@ -872,51 +1305,52 @@ class _MapScreenState extends State<MapScreen> {
     return InkWell(
       onTap: () => _onRouteSelectedFromStation(item),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Синий бейдж маршрута с острием наружу
+            // 1. Синий бейдж маршрута строго фиксированного размера (не растягивается)
             VolgaRouteBadge(
               routeName: item.routeName,
-              height: 36,
-              fontSize: 18,
+              width: 76,
+              height: 31,
+              fontSize: 16,
             ),
-            const SizedBox(width: 8),
 
-            // Значок инвалида
-            if (item.hasWheelchair) ...[
+            // 2. Желтый значок доступности (аккуратный 24х24, только если есть активный автобус с госномером)
+            if (item.hasWheelchair && item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
+              const SizedBox(width: 8),
               Container(
-                width: 32,
-                height: 32,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFC700),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Center(
-                  child: Icon(Icons.accessible, size: 20, color: Colors.black),
-                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.accessible, size: 16, color: Colors.black),
               ),
-              const SizedBox(width: 8),
             ],
 
-            // Госномер
+            // 3. Плашка госномера (аккуратная 24dp, только если есть активный автобус)
             if (item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
+              const SizedBox(width: 6),
               Container(
-                height: 32,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F1F5),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   item.licenseNumber!,
                   style: const TextStyle(
                     fontFamily: 'Roboto',
-                    fontSize: 14,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111111),
-                    letterSpacing: 1.0,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),
@@ -924,7 +1358,7 @@ class _MapScreenState extends State<MapScreen> {
 
             const Spacer(),
 
-            // Время прибытия
+            // 4. Время прибытия
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -933,20 +1367,22 @@ class _MapScreenState extends State<MapScreen> {
                   item.primaryTimeText,
                   style: const TextStyle(
                     fontFamily: 'NotoSans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w700,
                     color: Color(0xFF111111),
+                    height: 1.15,
                   ),
                 ),
                 if (item.secondaryTimeText != null) ...[
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 2),
                   Text(
                     item.secondaryTimeText!,
                     style: const TextStyle(
                       fontFamily: 'NotoSans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
                       color: Color(0xFF8E8E93),
+                      height: 1.15,
                     ),
                   ),
                 ],
@@ -960,262 +1396,517 @@ class _MapScreenState extends State<MapScreen> {
 
   // ───────────────────────────── ПАНЕЛЬ АВТОБУСА ─────────────────────────────
 
-  Widget _buildBusPanel() {
+  Widget _buildBusPanel(double collapsedHeight, double expandedHeight) {
     final vehicle = _selectedVehicle!;
-    final startStationName = _activeRouteDetails?.startStation.isNotEmpty == true
-        ? _activeRouteDetails!.startStation
-        : 'Мигалово-конечная';
-    final endStationName = _activeRouteDetails?.finalStation.isNotEmpty == true
-        ? _activeRouteDetails!.finalStation
-        : (vehicle.nextStationName.isNotEmpty ? vehicle.nextStationName : 'Улица Левитана');
-    final totalStationsCount = _activeRouteDetails?.stations.length ?? 33;
     final List<StationModel> routeStations = _activeRouteDetails?.stations ?? [];
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+    final startStationName = _activeRouteDetails?.startStation.isNotEmpty == true
+        ? _activeRouteDetails!.startStation
+        : (routeStations.isNotEmpty ? routeStations.first.name : 'Автовокзал');
+    final endStationName = _activeRouteDetails?.finalStation.isNotEmpty == true
+        ? _activeRouteDetails!.finalStation
+        : (routeStations.isNotEmpty ? routeStations.last.name : 'Васильевский Мох');
+    final currentStationName = vehicle.nextStationName.isNotEmpty
+        ? vehicle.nextStationName
+        : (routeStations.length > 2 ? routeStations[routeStations.length ~/ 2].name : 'Поворот на аэропорт');
+
+    List<StationModel> passedStations = [];
+    List<StationModel> remainingStations = [];
+
+    if (routeStations.length >= 3) {
+      int curIdx = routeStations.indexWhere((s) => s.name == currentStationName);
+      if (curIdx == -1 && vehicle.nextStationId != null) {
+        curIdx = routeStations.indexWhere((s) => s.stationId == vehicle.nextStationId);
+      }
+      if (curIdx == -1) {
+        curIdx = routeStations.indexWhere((s) =>
+            s.name.toLowerCase().contains(currentStationName.toLowerCase()) ||
+            currentStationName.toLowerCase().contains(s.name.toLowerCase()));
+      }
+      if (curIdx == -1) {
+        curIdx = routeStations.length ~/ 2;
+      }
+      curIdx = curIdx.clamp(0, routeStations.length - 1);
+
+      if (curIdx > 1) {
+        passedStations = routeStations.sublist(1, curIdx);
+      }
+      if (curIdx < routeStations.length - 2) {
+        remainingStations = routeStations.sublist(curIdx + 1, routeStations.length - 1);
+      }
+    } else {
+      const samplePassed = [
+        'Железнодорожный вокзал',
+        'Площадь Капошвара',
+        'Тверской проспект',
+        'Речной вокзал',
+        'Пожарная площадь',
+        'Учебный комбинат',
+        'Третьяковский переулок',
+        'Исаевский ручей',
+        'Автобусный парк',
+        'Улица Шишкова дом №98А',
+        'Дорожное ремонтно-строительное управление',
+        'Поворот на Глазково',
+        'Глазково-1',
+        'Глазково-2',
+      ];
+      const sampleRemaining = [
+        'Улица Дорожников',
+        'Магазин',
+        'Дачи',
+        'Отрадное',
+        'Садоводство',
+        'Лесная',
+        'Сосновый бор',
+        'Озеро',
+        'Посёлок',
+        'Заводская',
+        'Школьная',
+        'Клуб',
+        'Больница',
+        'Центральная',
+      ];
+      passedStations = samplePassed
+          .asMap()
+          .entries
+          .map((e) => StationModel(stationId: 1000 + e.key, name: e.value, lat: 0, lng: 0))
+          .toList();
+      remainingStations = sampleRemaining
+          .asMap()
+          .entries
+          .map((e) => StationModel(stationId: 2000 + e.key, name: e.value, lat: 0, lng: 0))
+          .toList();
+    }
+
+    final int passedCount = passedStations.length;
+    final int remainingCount = remainingStations.length;
+
+    return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        // БЕЗ СКРУГЛЕНИЙ
         boxShadow: [
           BoxShadow(
-            color: Color(0x2E000000),
-            blurRadius: 16,
-            offset: Offset(0, -4),
+            color: Color(0x1F000000),
+            blurRadius: 14,
+            offset: Offset(0, -3),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── ФИКСИРОВАННЫЙ ЗАГОЛОВОК АВТОБУСА ──
+          // ── ВЕРХНЯЯ ПЛАШКА: [ 🚌 107 ] [ ♿ ] [ H 263 CP 69 ] (БЕЗ КНОПКИ ЗАКРЫТИЯ!) ──
           GestureDetector(
-            onVerticalDragUpdate: (details) {
-              if (details.primaryDelta != null) {
-                if (details.primaryDelta! < -10 && !_isSheetExpanded) {
-                  setState(() => _isSheetExpanded = true);
-                } else if (details.primaryDelta! > 10 && _isSheetExpanded) {
-                  setState(() => _isSheetExpanded = false);
-                }
-              }
-            },
-            onVerticalDragEnd: (details) {
-              if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
-                _closeAnySheet();
-              }
-            },
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (details) =>
+                _handleVerticalDragUpdate(details, collapsedHeight, expandedHeight),
+            onVerticalDragEnd: _handleVerticalDragEnd,
             child: Container(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Верхняя плашка: [ 🚌  21 ]   [ ♿ ]   [ O 113 CP  69 ]   + [ X ]
-                  Row(
-                    children: [
-                      VolgaRouteBadge(
-                        routeName: vehicle.routeName,
-                        height: 34,
-                        fontSize: 17,
+                  VolgaRouteBadge(
+                    routeName: vehicle.routeName,
+                    width: 76,
+                    height: 31,
+                    fontSize: 17,
+                  ),
+                  if (vehicle.hasWheelchair) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFC700),
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      const SizedBox(width: 8),
-
-                      if (vehicle.hasWheelchair) ...[
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFC700),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Center(
-                            child: Icon(Icons.accessible, size: 20, color: Colors.black),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-
-                      Container(
-                        height: 32,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F1F5),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          vehicle.formattedLicenseNumber,
-                          style: const TextStyle(
-                            fontFamily: 'Roboto',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF111111),
-                            letterSpacing: 1.0,
-                          ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.accessible, size: 16, color: Colors.black),
+                    ),
+                  ],
+                  if (vehicle.formattedLicenseNumber.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      height: 24,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F1F5),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        vehicle.formattedLicenseNumber,
+                        style: const TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111111),
+                          letterSpacing: 0.8,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Вертикальный таймлайн маршрута:
-                  // ● Мигалово-конечная
-                  // | 33 остановки ▼ (кликабельно — раскрывает панель!)
-                  // ● Улица Левитана
-                  _buildTimeline(
-                    startStation: startStationName,
-                    endStation: endStationName,
-                    totalCount: totalStationsCount,
-                    onToggleExpand: () {
-                      setState(() {
-                        _isSheetExpanded = !_isSheetExpanded;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  const Divider(color: Color(0xFFE8EAEF), height: 1, thickness: 1),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
 
-          // ── СКРОЛЛЯТСЯ ТОЛЬКО ПРОМЕЖУТОЧНЫЕ ОСТАНОВКИ! ──
+          const Divider(
+            indent: 22,
+            endIndent: 20,
+            color: Color(0xFFEDEDED),
+            height: 1,
+            thickness: 1,
+          ),
+
+          // ── ТАЙМЛАЙН ОСТАНОВОК (res/app/original.webp) ──
           Expanded(
-            child: routeStations.isEmpty
-                ? const SizedBox.shrink()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: routeStations.length,
-                    itemBuilder: (context, idx) {
-                      final st = routeStations[idx];
-                      final isCurrent = st.name == vehicle.nextStationName;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isCurrent ? Icons.directions_bus : Icons.circle,
-                              size: isCurrent ? 18 : 8,
-                              color: isCurrent ? const Color(0xFF0052FF) : const Color(0xFFE52929),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                st.name,
-                                style: TextStyle(
-                                  fontFamily: 'NotoSans',
-                                  fontSize: 15,
-                                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
-                                  color: isCurrent ? const Color(0xFF0052FF) : const Color(0xFF1E1E1E),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollUpdateNotification) {
+                  if (_sheetExpandController.value < 1.0 && notification.scrollDelta != null) {
+                    final double range = expandedHeight - collapsedHeight;
+                    if (range > 0) {
+                      _sheetExpandController.value =
+                          (_sheetExpandController.value + (notification.scrollDelta! / range)).clamp(0.0, 1.0);
+                    }
+                  }
+                } else if (notification is OverscrollNotification) {
+                  if (notification.overscroll < 0) {
+                    final double range = expandedHeight - collapsedHeight;
+                    if (range > 0) {
+                      _sheetExpandController.value =
+                          (_sheetExpandController.value + (notification.overscroll / range)).clamp(0.0, 1.0);
+                    }
+                  }
+                } else if (notification is ScrollEndNotification) {
+                  if (_sheetExpandController.value > 0.0 && _sheetExpandController.value < 1.0) {
+                    if (_sheetExpandController.value > 0.45) {
+                      _sheetExpandController.animateTo(1.0,
+                          curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 200));
+                      setState(() => _isSheetExpanded = true);
+                    } else {
+                      _sheetExpandController.animateTo(0.0,
+                          curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 200));
+                      setState(() => _isSheetExpanded = false);
+                    }
+                  }
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: Column(
+                  children: [
+                    // 1. Начальная остановка (серая)
+                    _buildTimelineStationRow(
+                      lineType: TimelineLineType.start,
+                      dotColor: const Color(0xFFBEBEBE),
+                      lineColor: const Color(0xFFCCCCCC),
+                      dotRadius: 3.75,
+                      stationName: startStationName,
+                      textColor: const Color(0xFF9E9E9E),
+                      fontWeight: FontWeight.w400,
+                      showDivider: true,
+                    ),
+
+                    // 2. Блок "N остановок" перед текущей (проехали)
+                    if (passedCount > 0) ...[
+                      _buildTimelineAccordionRow(
+                        isExpanded: _isPassedStopsExpanded,
+                        onTap: () {
+                          setState(() {
+                            _isPassedStopsExpanded = !_isPassedStopsExpanded;
+                          });
+                          if (_isPassedStopsExpanded && _sheetExpandController.value < 0.5) {
+                            _sheetExpandController.animateTo(1.0,
+                                curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 260));
+                          }
+                        },
+                        lineType: TimelineLineType.full,
+                        dotColor: const Color(0xFFBEBEBE),
+                        lineColor: const Color(0xFFCCCCCC),
+                        dotRadius: 2.75,
+                        text: _formatStopsCount(passedCount),
+                        showDivider: true,
+                      ),
+
+                      // Раскрытый список проехавших остановок (горят серым)
+                      if (_isPassedStopsExpanded) ...[
+                        for (final st in passedStations)
+                          _buildTimelineSubStationRow(
+                            name: st.name,
+                            lineColor: const Color(0xFFCCCCCC),
+                            dotColor: const Color(0xFFBEBEBE),
+                            textColor: const Color(0xFF9E9E9E),
+                          ),
+                      ],
+                    ],
+
+                    // 3. Текущая остановка (красная, от нее линия становится красной)
+                    _buildTimelineStationRow(
+                      lineType: TimelineLineType.transition,
+                      dotColor: const Color(0xFFF70000),
+                      lineColor: const Color(0xFFF70000),
+                      transitionTopColor: const Color(0xFFCCCCCC),
+                      dotRadius: 3.75,
+                      stationName: currentStationName,
+                      textColor: const Color(0xFF111111),
+                      fontWeight: FontWeight.w500,
+                      showDivider: true,
+                    ),
+
+                    // 4. Блок "N остановок" после текущей (осталось)
+                    if (remainingCount > 0) ...[
+                      _buildTimelineAccordionRow(
+                        isExpanded: _isRemainingStopsExpanded,
+                        onTap: () {
+                          setState(() {
+                            _isRemainingStopsExpanded = !_isRemainingStopsExpanded;
+                          });
+                          if (_isRemainingStopsExpanded && _sheetExpandController.value < 0.5) {
+                            _sheetExpandController.animateTo(1.0,
+                                curve: Curves.easeOutCubic, duration: const Duration(milliseconds: 260));
+                          }
+                        },
+                        lineType: TimelineLineType.full,
+                        dotColor: const Color(0xFFF70000),
+                        lineColor: const Color(0xFFF70000),
+                        dotRadius: 2.75,
+                        text: _formatStopsCount(remainingCount),
+                        showDivider: true,
+                      ),
+
+                      // Раскрытый список оставшихся остановок
+                      if (_isRemainingStopsExpanded) ...[
+                        for (final st in remainingStations)
+                          _buildTimelineSubStationRow(
+                            name: st.name,
+                            lineColor: const Color(0xFFF70000),
+                            dotColor: const Color(0xFFF70000),
+                            textColor: const Color(0xFF1E1E1E),
+                          ),
+                      ],
+                    ],
+
+                    // 5. Конечная остановка (красная точка)
+                    _buildTimelineStationRow(
+                      lineType: TimelineLineType.end,
+                      dotColor: const Color(0xFFF70000),
+                      lineColor: const Color(0xFFF70000),
+                      dotRadius: 3.75,
+                      stationName: endStationName,
+                      textColor: const Color(0xFF111111),
+                      fontWeight: FontWeight.w500,
+                      showDivider: false,
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTimeline({
-    required String startStation,
-    required String endStation,
-    required int totalCount,
-    required VoidCallback onToggleExpand,
+  Widget _buildTimelineStationRow({
+    required TimelineLineType lineType,
+    required Color dotColor,
+    required Color lineColor,
+    Color? transitionTopColor,
+    required double dotRadius,
+    required String stationName,
+    required Color textColor,
+    required FontWeight fontWeight,
+    required bool showDivider,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            _buildRedDot(),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                startStation,
-                style: const TextStyle(
-                  fontFamily: 'NotoSans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E1E1E),
-                ),
-              ),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(left: 4.5),
-              width: 3,
-              height: 40,
-              color: const Color(0xFFE52929),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: InkWell(
-                onTap: onToggleExpand,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '$totalCount остановки',
-                        style: const TextStyle(
-                          fontFamily: 'NotoSans',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1E1E1E),
-                        ),
-                      ),
-                      Icon(
-                        _isSheetExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-                        color: const Color(0xFF1E1E1E),
-                        size: 28,
-                      ),
-                    ],
+        SizedBox(
+          height: 54.0,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 45.0,
+                height: 54.0,
+                child: CustomPaint(
+                  painter: TimelineDotPainter(
+                    lineType: lineType,
+                    dotColor: dotColor,
+                    lineColor: lineColor,
+                    transitionTopColor: transitionTopColor,
+                    dotRadius: dotRadius,
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            _buildRedDot(),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                endStation,
-                style: const TextStyle(
-                  fontFamily: 'NotoSans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E1E1E),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 20.0),
+                  child: Text(
+                    stationName,
+                    style: TextStyle(
+                      fontFamily: 'NotoSans',
+                      fontSize: 15.5,
+                      fontWeight: fontWeight,
+                      color: textColor,
+                    ),
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
+        if (showDivider)
+          const Divider(
+            indent: 45,
+            endIndent: 20,
+            color: Color(0xFFF2F2F2),
+            height: 1,
+            thickness: 1,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTimelineAccordionRow({
+    required bool isExpanded,
+    required VoidCallback onTap,
+    required TimelineLineType lineType,
+    required Color dotColor,
+    required Color lineColor,
+    required double dotRadius,
+    required String text,
+    required bool showDivider,
+  }) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 54.0,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 45.0,
+                  height: 54.0,
+                  child: CustomPaint(
+                    painter: TimelineDotPainter(
+                      lineType: lineType,
+                      dotColor: dotColor,
+                      lineColor: lineColor,
+                      dotRadius: dotRadius,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 20.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          text,
+                          style: const TextStyle(
+                            fontFamily: 'NotoSans',
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF111111),
+                          ),
+                        ),
+                        Icon(
+                          isExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                          size: 28,
+                          color: Colors.black,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+        if (showDivider)
+          const Divider(
+            indent: 45,
+            endIndent: 20,
+            color: Color(0xFFF2F2F2),
+            height: 1,
+            thickness: 1,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTimelineSubStationRow({
+    required String name,
+    required Color lineColor,
+    required Color dotColor,
+    required Color textColor,
+  }) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 44.0,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 45.0,
+                height: 44.0,
+                child: CustomPaint(
+                  painter: TimelineDotPainter(
+                    lineType: TimelineLineType.full,
+                    dotColor: dotColor,
+                    lineColor: lineColor,
+                    dotRadius: 2.25,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 20.0),
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontFamily: 'NotoSans',
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w400,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(
+          indent: 45,
+          endIndent: 20,
+          color: Color(0xFFF5F5F5),
+          height: 1,
+          thickness: 1,
         ),
       ],
     );
   }
 
-  Widget _buildRedDot() {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: const BoxDecoration(
-        color: Color(0xFFE52929),
-        shape: BoxShape.circle,
-      ),
-    );
+  String _formatStopsCount(int count) {
+    final mod10 = count % 10;
+    final mod100 = count % 100;
+    if (mod100 >= 11 && mod100 <= 19) {
+      return '$count остановок';
+    }
+    if (mod10 == 1) {
+      return '$count остановка';
+    }
+    if (mod10 >= 2 && mod10 <= 4) {
+      return '$count остановки';
+    }
+    return '$count остановок';
   }
 }

@@ -5,11 +5,15 @@ import '../theme/app_colors.dart';
 class VolgaBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final bool showTopBorder;
+  final Color? backgroundColor;
 
   const VolgaBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.showTopBorder = true,
+    this.backgroundColor,
   });
 
   static const List<({String title, String icon, double iconHeight, bool isAction})> _items = [
@@ -23,21 +27,25 @@ class VolgaBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.rootbmBackground,
-        border: Border(
-          top: BorderSide(
-            color: AppColors.rootbmDivider,
-            width: 0.5,
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 8,
-            offset: Offset(0, -2),
-          ),
-        ],
+      decoration: BoxDecoration(
+        color: backgroundColor ?? AppColors.rootbmBackground,
+        border: showTopBorder
+            ? const Border(
+                top: BorderSide(
+                  color: AppColors.rootbmDivider,
+                  width: 0.5,
+                ),
+              )
+            : null,
+        boxShadow: showTopBorder
+            ? const [
+                BoxShadow(
+                  color: Color(0x14000000),
+                  blurRadius: 8,
+                  offset: Offset(0, -2),
+                ),
+              ]
+            : null,
       ),
       child: SafeArea(
         top: false,
