@@ -503,7 +503,7 @@ class _MapScreenState extends State<MapScreen> {
           icon: PlacemarkIcon.single(
             PlacemarkIconStyle(
               image: _locationIcon,
-              scale: 0.24,
+              scale: 0.50,
             ),
           ),
           opacity: 1.0,
@@ -517,7 +517,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEBEBEB),
+      backgroundColor: const Color(0xFFE8ECEF),
       body: Stack(
         children: [
           // 1. Полноэкранная векторная карта Яндекс MapKit
@@ -565,37 +565,38 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // 3. Плавающая белая кнопка "Построить маршрут" внизу (прямоугольник со скруглением 14px по res/map.webp)
+          // 3. Плавающая белая кнопка "Построить маршрут" внизу (по res/app/original.webp)
           Positioned(
             left: 16,
             right: 16,
             bottom: 16,
             child: Container(
-              height: 52,
+              height: 48,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x1F000000),
-                    blurRadius: 12,
-                    offset: Offset(0, 3),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
                   ),
                 ],
               ),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: () {},
                   child: const Center(
                     child: Text(
                       'Построить маршрут',
                       style: TextStyle(
                         fontFamily: 'NotoSans',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
                         color: Color(0xFF1E1E1E),
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ),

@@ -31,7 +31,7 @@ abstract class AppAssets {
 
   // Bottom Navigation Icons
   static const String icRootbmNews = 'assets/icons/ic_rootbm_news.png';
-  static const String icRootbmMap = 'assets/icons/ic_rootbm_map.png';
+  static const String icRootbmMap = 'assets/icons/bms_ic_map_pin.png';
   static const String icRootbmActionQr = 'assets/icons/ic_rootbm_action_qr.png';
   static const String icRootbmActionBeacon = 'assets/icons/ic_rootbm_action_beacon.png';
   static const String icRootbmServices = 'assets/icons/ic_rootbm_services.png';

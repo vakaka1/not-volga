@@ -29,6 +29,8 @@ class _MainScreenState extends State<MainScreen> {
   late final List<Widget> _pages;
 
   // Состояние загрузки карты при старте приложения
+  bool _isMapReady = false;
+  bool _isSplashAnimationDone = false;
   bool _isSplashVisible = true;
   bool _showSplashOverlay = true;
 
@@ -63,13 +65,29 @@ class _MainScreenState extends State<MainScreen> {
     // Страховочный тайм-аут на случай задержек платформенного MapKit
     _safetyTimeoutTimer = Timer(const Duration(milliseconds: 3500), () {
       if (mounted && _showSplashOverlay) {
-        _onMapReady();
+        _isMapReady = true;
+        _isSplashAnimationDone = true;
+        _checkAndDismissSplash();
       }
     });
   }
 
   void _onMapReady() {
-    if (mounted && _isSplashVisible) {
+    if (mounted && !_isMapReady) {
+      _isMapReady = true;
+      _checkAndDismissSplash();
+    }
+  }
+
+  void _onSplashAnimationDone() {
+    if (mounted && !_isSplashAnimationDone) {
+      _isSplashAnimationDone = true;
+      _checkAndDismissSplash();
+    }
+  }
+
+  void _checkAndDismissSplash() {
+    if (_isMapReady && _isSplashAnimationDone && _isSplashVisible && mounted) {
       _safetyTimeoutTimer?.cancel();
       setState(() {
         _isSplashVisible = false;
@@ -137,7 +155,9 @@ class _MainScreenState extends State<MainScreen> {
                   });
                 }
               },
-              child: const SplashScreen(),
+              child: SplashScreen(
+                onAnimationComplete: _onSplashAnimationDone,
+              ),
             ),
           ),
       ],

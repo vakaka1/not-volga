@@ -42,7 +42,7 @@ class VolgaBottomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 56,
+          height: 58,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: List.generate(_items.length, (index) {
@@ -60,21 +60,21 @@ class VolgaBottomNavBar extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Positioned(
-                            top: -16,
+                            top: -22,
                             child: Image.asset(
                               item.icon,
-                              width: 72,
-                              height: 72,
+                              width: 82,
+                              height: 82,
                               fit: BoxFit.contain,
                             ),
                           ),
                           Positioned(
-                            bottom: 4,
+                            bottom: 5,
                             child: Text(
                               item.title,
                               style: TextStyle(
                                 fontFamily: 'NotoSans',
-                                fontSize: 10,
+                                fontSize: 10.5,
                                 fontWeight: isSelected
                                     ? FontWeight.w600
                                     : FontWeight.w500,
@@ -101,18 +101,18 @@ class VolgaBottomNavBar extends StatelessWidget {
                       children: [
                         Image.asset(
                           item.icon,
-                          height: 27,
+                          height: 25,
                           fit: BoxFit.contain,
                           color: isSelected
                               ? AppColors.rootbmElementSelected
                               : AppColors.rootbmElementIcon,
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           item.title,
                           style: TextStyle(
                             fontFamily: 'NotoSans',
-                            fontSize: 10,
+                            fontSize: 10.5,
                             fontWeight: isSelected
                                 ? FontWeight.w600
                                 : FontWeight.w500,

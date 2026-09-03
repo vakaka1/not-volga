@@ -47,7 +47,7 @@
 1. Убедитесь, что установлен [Flutter SDK](https://flutter.dev/docs/get-started/install).
 2. Склонируйте репозиторий:
    ```bash
-   git clone https://github.com/your-username/not-volga.git
+   git clone https://github.com/vakaka1/not-volga.git
    cd not-volga
    ```
 3. Установите зависимости:
@@ -58,3 +58,16 @@
    ```bash
    flutter run
    ```
+Для сборки APK и установки через ADB:
+Сборка:
+```bash
+flutter build apk --release
+```
+Узнать ID устройства:
+```bash
+flutter devices
+```
+Установка:
+```bash
+adb -s ID-УСТРОЙСТВА install -r build/app/outputs/flutter-apk/app-release.apk
+```
