@@ -57,16 +57,18 @@ class MerlinTransportService {
       }
 
       // 3. Загрузка геотреков маршрутов
-      final pathsJsonStr = await rootBundle.loadString('assets/data/tver_paths.json');
-      final Map<String, dynamic> pathsData = jsonDecode(pathsJsonStr);
-      pathsData.forEach((key, val) {
-        final rId = int.tryParse(key);
-        if (rId != null && val is List) {
-          _cachedPaths[rId] = val
-              .map((p) => RoutePathPoint.fromJson(p as Map<String, dynamic>))
-              .toList();
-        }
-      });
+      if (_cachedPaths.isEmpty) {
+        final pathsJsonStr = await rootBundle.loadString('assets/data/tver_paths.json');
+        final Map<String, dynamic> pathsData = jsonDecode(pathsJsonStr);
+        pathsData.forEach((key, val) {
+          final rId = int.tryParse(key);
+          if (rId != null && val is List) {
+            _cachedPaths[rId] = val
+                .map((p) => RoutePathPoint.fromJson(p as Map<String, dynamic>))
+                .toList();
+          }
+        });
+      }
     } catch (_) {}
   }
 
@@ -101,26 +103,28 @@ class MerlinTransportService {
   }
 
   /// Получить детали маршрута со списком остановок
-  Future<RouteDetailsModel?> getRouteDetails(int routeId) async {
+  Future<RouteDetailsModel?> getRouteDetails(int routeId, {bool preferOffline = false}) async {
     if (_cachedRouteDetails.containsKey(routeId)) {
       return _cachedRouteDetails[routeId];
     }
 
-    try {
-      final response = await _client
-          .get(
-            Uri.parse('$baseUrl/routes/$routeId'),
-            headers: {'User-Agent': 'Dart/3.0 (dart:io)', 'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 3));
+    if (!preferOffline) {
+      try {
+        final response = await _client
+            .get(
+              Uri.parse('$baseUrl/routes/$routeId'),
+              headers: {'User-Agent': 'Dart/3.0 (dart:io)', 'Accept': 'application/json'},
+            )
+            .timeout(const Duration(seconds: 3));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        final details = RouteDetailsModel.fromJson(data);
-        _cachedRouteDetails[routeId] = details;
-        return details;
-      }
-    } catch (_) {}
+        if (response.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+          final details = RouteDetailsModel.fromJson(data);
+          _cachedRouteDetails[routeId] = details;
+          return details;
+        }
+      } catch (_) {}
+    }
 
     // Офлайн-генерация деталей маршрута
     final route = _cachedRoutes.firstWhere(
@@ -374,6 +378,46 @@ class MerlinTransportService {
     });
 
     return fallbackList;
+  }
+
+  /// Проверка доступности API (пингуем легковесный эндпоинт)
+  Future<bool> pingApi({Duration timeout = const Duration(milliseconds: 1500)}) async {
+    try {
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/locations'),
+            headers: {'User-Agent': 'Dart/3.0 (dart:io)', 'Accept': 'application/json'},
+          )
+          .timeout(timeout);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Определение транспорта с защитой от отсутствия интернета (до 5 попыток)
+  Future<({bool isApiAvailable, ScannedTransportInfo? transportInfo})> resolveVehicleWithRetry(
+    String rawQrData, {
+    int maxAttempts = 5,
+    void Function(int attempt, int maxAttempts)? onAttempt,
+  }) async {
+    bool apiAvailable = false;
+    ScannedTransportInfo? transportInfo;
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      onAttempt?.call(attempt, maxAttempts);
+      final isOnline = await pingApi();
+      if (isOnline) {
+        apiAvailable = true;
+        transportInfo = await resolveVehicleForPayment(rawQrData);
+        break;
+      }
+      if (attempt < maxAttempts) {
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+    }
+
+    return (isApiAvailable: apiAvailable, transportInfo: transportInfo);
   }
 
   /// Определение транспорта и подготовка данных для покупки билета по QR-коду

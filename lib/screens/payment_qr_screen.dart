@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../screens/qr_route_payment_screen.dart';
+import '../screens/ticket_constructor_screen.dart';
 import '../services/balance_service.dart';
 import '../services/merlin_transport_service.dart';
+import '../services/qr_payload_parser.dart';
 import '../theme/app_colors.dart';
 import '../widgets/insufficient_funds_dialog.dart';
 import '../widgets/qr_scanner_overlay.dart';
@@ -167,11 +169,61 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   }
 
   Future<void> _openPaymentSheet(String qrData) async {
-    final transportInfo = await MerlinTransportService().resolveVehicleForPayment(qrData);
+    // Try reaching the API up to 5 times for offline protection
+    final apiResult = await MerlinTransportService().resolveVehicleWithRetry(
+      qrData,
+      maxAttempts: 5,
+    );
 
     if (!mounted) return;
 
+    // If API could not be reached after 5 attempts -> redirect to Ticket Constructor!
+    if (!apiResult.isApiAvailable) {
+      await _stopCamera();
+      if (!mounted) return;
+
+      final parsed = QrPayloadParser.parse(qrData);
+      String? initRoute = parsed.routeNumber;
+      String? initPlate;
+      if (initRoute != null) {
+        final liveBus = MerlinTransportService().getLiveVehicleForRoute(initRoute);
+        initPlate = liveBus?.formattedLicenseNumber;
+      }
+
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => TicketConstructorScreen(
+            initialRouteNumber: initRoute,
+            initialLicensePlate: initPlate,
+          ),
+        ),
+      );
+
+      if (result == true) {
+        // Ticket successfully created in constructor
+        if (widget.onPaymentSuccess != null) {
+          widget.onPaymentSuccess!();
+        } else {
+          _handleBack();
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _detectedBarcodes = [];
+          _isProcessing = false;
+        });
+        if (widget.isActive) {
+          await _startCamera();
+        }
+      }
+      return;
+    }
+
+    final transportInfo = apiResult.transportInfo;
     if (transportInfo == null) {
+
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -266,7 +318,29 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
 
           // 3. Top bar UI matching res/qr.webp
           _buildTopBar(),
+
+          // 4. Loading indicator while connecting/retrying
+          if (_isProcessing)
+            _buildConnectingOverlay(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildConnectingOverlay() {
+    return Center(
+      child: Container(
+        width: 68,
+        height: 68,
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          color: const Color(0xB3000000),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const CircularProgressIndicator(
+          strokeWidth: 3.5,
+          color: AppColors.qrContourYellow,
+        ),
       ),
     );
   }
