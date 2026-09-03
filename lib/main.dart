@@ -2,15 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'screens/main_screen.dart';
 import 'services/balance_service.dart';
-import 'services/merlin_transport_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Future.wait([
-    BalanceService.instance.init(),
-    MerlinTransportService().initOfflineData(),
-  ]);
+  await BalanceService.instance.init();
   runApp(const NotVolgaApp());
 }
 

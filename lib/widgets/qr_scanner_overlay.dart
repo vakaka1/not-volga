@@ -4,7 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../theme/app_colors.dart';
 
 /// Overlay widget that paints the darkened background with a rounded cutout window
-/// matching `res/qr.webp` and renders a yellow detection contour on recognized QR codes.
+/// matching `res/qr.webp` and renders a thin solid BLUE detection contour on recognized QR codes.
 class QrScannerOverlay extends StatelessWidget {
   final List<Barcode> detectedBarcodes;
   final Size? captureSize;
@@ -82,29 +82,20 @@ class _QrScannerOverlayPainter extends CustomPainter {
       ..strokeWidth = 1.0;
     canvas.drawRRect(cutoutRRect, cutoutBorderPaint);
 
-    // Draw yellow contour on detected QR codes
+    // Draw thin solid BLUE contour on detected QR codes
     if (detectedBarcodes.isNotEmpty) {
       _drawDetectedBarcodes(canvas, size);
     }
   }
 
   void _drawDetectedBarcodes(Canvas canvas, Size size) {
+    // Тонкая сплошная синяя линия (#0052FF)
     final contourPaint = Paint()
-      ..color = AppColors.qrContourYellow
+      ..color = const Color(0xFF0052FF)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5
+      ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-
-    final glowPaint = Paint()
-      ..color = AppColors.qrContourYellow.withValues(alpha: 0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8.0
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
-
-    final fillPaint = Paint()
-      ..color = AppColors.qrContourYellow.withValues(alpha: 0.15)
-      ..style = PaintingStyle.fill;
 
     for (final barcode in detectedBarcodes) {
       final corners = barcode.corners;
@@ -121,58 +112,14 @@ class _QrScannerOverlayPainter extends CustomPainter {
           ..lineTo(mappedPoints[3].dx, mappedPoints[3].dy)
           ..close();
 
-        // Draw glow, fill, and sharp contour in yellow
-        canvas.drawPath(path, glowPaint);
-        canvas.drawPath(path, fillPaint);
+        // Рисуем сплошную тонкую синюю линию
         canvas.drawPath(path, contourPaint);
-
-        // Draw corner brackets
-        _drawCornerAccents(canvas, mappedPoints);
       } else {
-        // If exact corners aren't available, draw a yellow outline around the cutout
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(cutoutRect, const Radius.circular(26.0)),
-          glowPaint,
-        );
+        // Fallback: сплошная синяя рамка вокруг окна видоискателя
         canvas.drawRRect(
           RRect.fromRectAndRadius(cutoutRect, const Radius.circular(26.0)),
           contourPaint,
         );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(cutoutRect, const Radius.circular(26.0)),
-          fillPaint,
-        );
-      }
-    }
-  }
-
-  void _drawCornerAccents(Canvas canvas, List<Offset> points) {
-    final accentPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
-      ..strokeCap = StrokeCap.round;
-
-    for (int i = 0; i < points.length; i++) {
-      final p1 = points[i];
-      final pNext = points[(i + 1) % points.length];
-      final pPrev = points[(i - 1 + points.length) % points.length];
-
-      final vNext = (pNext - p1);
-      final vPrev = (pPrev - p1);
-
-      final lenNext = vNext.distance;
-      final lenPrev = vPrev.distance;
-
-      if (lenNext > 0 && lenPrev > 0) {
-        final dNext = math.min(18.0, lenNext * 0.25);
-        final dPrev = math.min(18.0, lenPrev * 0.25);
-
-        final pAccentNext = p1 + (vNext / lenNext) * dNext;
-        final pAccentPrev = p1 + (vPrev / lenPrev) * dPrev;
-
-        canvas.drawLine(p1, pAccentNext, accentPaint);
-        canvas.drawLine(p1, pAccentPrev, accentPaint);
       }
     }
   }

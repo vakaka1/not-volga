@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../screens/qr_route_payment_screen.dart';
+import '../services/merlin_transport_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/payment_confirmation_sheet.dart';
 import '../widgets/qr_scanner_overlay.dart';
@@ -45,14 +47,30 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
     );
   }
 
+  Future<void> _startCamera() async {
+    try {
+      if (!_controller.value.isRunning) {
+        await _controller.start();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _stopCamera() async {
+    try {
+      if (_controller.value.isRunning) {
+        await _controller.stop();
+      }
+    } catch (_) {}
+  }
+
   @override
   void didUpdateWidget(PaymentQrScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive) {
       if (widget.isActive) {
-        _controller.start();
+        _startCamera();
       } else {
-        _controller.stop();
+        _stopCamera();
       }
     }
   }
@@ -67,9 +85,9 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      _controller.stop();
+      _stopCamera();
     } else if (state == AppLifecycleState.resumed && widget.isActive) {
-      _controller.start();
+      _startCamera();
     }
   }
 
@@ -123,14 +141,63 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   }
 
   Future<void> _openPaymentSheet(String qrData) async {
-    final transportInfo = ScannedTransportInfo.fromRawData(qrData);
+    final transportInfo = await MerlinTransportService().resolveVehicleForPayment(qrData);
 
-    await PaymentConfirmationSheet.show(
-      context,
-      transportInfo: transportInfo,
-      onPaymentSuccess: () {
-        PaymentSuccessDialog.show(context, transportInfo);
-      },
+    if (!mounted) return;
+
+    if (transportInfo == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Неверный QR-код',
+            style: TextStyle(
+              fontFamily: 'NotoSans',
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: const Text(
+            'Отсканированный код не является QR-кодом оплаты проезда «Транспорт Верхневолжья». Пожалуйста, наведите камеру на официальный QR-код в салоне автобуса.',
+            style: TextStyle(fontFamily: 'NotoSans', fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'OK',
+                style: TextStyle(
+                  fontFamily: 'NotoSans',
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0052FF),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _detectedBarcodes = [];
+          _isProcessing = false;
+        });
+      }
+      return;
+    }
+
+    // Pause camera while payment route screen is shown
+    await _stopCamera();
+
+    if (!mounted) return;
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => QrRoutePaymentScreen(
+          transportInfo: transportInfo,
+        ),
+      ),
     );
 
     if (mounted) {
@@ -138,6 +205,9 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
         _detectedBarcodes = [];
         _isProcessing = false;
       });
+      if (widget.isActive) {
+        await _startCamera();
+      }
     }
   }
 

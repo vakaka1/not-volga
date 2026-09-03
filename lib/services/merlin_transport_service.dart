@@ -8,6 +8,8 @@ import '../models/transport/route_path_point.dart';
 import '../models/transport/station_arrival_model.dart';
 import '../models/transport/station_model.dart';
 import '../models/transport/vehicle_model.dart';
+import '../services/qr_payload_parser.dart';
+import '../widgets/payment_confirmation_sheet.dart';
 
 class MerlinTransportService {
   static const String baseUrl = 'https://api.merlin.tvercard.ru/api/client/v1';
@@ -255,4 +257,164 @@ class MerlinTransportService {
       );
     }).toList();
   }
+
+  /// Определение транспорта и подготовка данных для покупки билета по QR-коду
+  Future<ScannedTransportInfo?> resolveVehicleForPayment(
+    String rawQrData, {
+    int locationId = 1,
+  }) async {
+    final parsed = QrPayloadParser.parse(rawQrData);
+
+    // Если QR-код не содержит идентификаторов транспорта и не относится к tvercard
+    if (!parsed.hasIdentifier && !rawQrData.toLowerCase().contains('tvercard')) {
+      return null;
+    }
+
+    // 1. Инициализируем локальные данные маршрутов и остановок
+    await initOfflineData();
+
+    // 2. Опрашиваем живые автобусы по всей Тверской области
+    List<VehicleModel> liveVehicles = [];
+    try {
+      liveVehicles = await getVehicles(
+        topLat: 59.5,
+        bottomLat: 55.0,
+        leftLng: 30.0,
+        rightLng: 39.0,
+      );
+    } catch (_) {}
+
+    VehicleModel? matchedVehicle;
+
+    // 3. Поиск по живым автобусам Твери
+    if (parsed.uuid != null) {
+      for (final v in liveVehicles) {
+        if (v.vehicleId.toLowerCase() == parsed.uuid ||
+            (v.qrUuid != null && v.qrUuid!.toLowerCase() == parsed.uuid)) {
+          matchedVehicle = v;
+          break;
+        }
+      }
+    }
+
+    if (matchedVehicle == null && parsed.qrNumber != null) {
+      for (final v in liveVehicles) {
+        if (v.qrNumber != null && v.qrNumber!.toLowerCase() == parsed.qrNumber!.toLowerCase()) {
+          matchedVehicle = v;
+          break;
+        }
+      }
+    }
+
+    if (matchedVehicle == null && parsed.boardNumber != null) {
+      for (final v in liveVehicles) {
+        if (v.boardNumber == parsed.boardNumber) {
+          matchedVehicle = v;
+          break;
+        }
+      }
+    }
+
+    if (matchedVehicle == null && parsed.routeNumber != null) {
+      for (final v in liveVehicles) {
+        if (v.routeName == parsed.routeNumber) {
+          matchedVehicle = v;
+          break;
+        }
+      }
+    }
+
+    // Если найден активный автобус на линии в Твери
+    if (matchedVehicle != null) {
+      final routeDetails = await getRouteDetails(matchedVehicle.routeId);
+      final rawRouteName = matchedVehicle.routeName;
+      final routeDigits = int.tryParse(rawRouteName.replaceAll(RegExp(r'\D'), ''));
+      final isIntercity = (routeDigits != null && routeDigits >= 100) || rawRouteName.length >= 3;
+
+      final stations = routeDetails?.stations.map((s) => s.name).toList() ?? [];
+      final currentStop = matchedVehicle.nextStationName.isNotEmpty
+          ? matchedVehicle.nextStationName
+          : (stations.isNotEmpty ? stations.first : '');
+      final endStation = routeDetails?.finalStation.isNotEmpty == true
+          ? routeDetails!.finalStation
+          : (stations.isNotEmpty ? stations.last : 'Конечная');
+
+      final routeTitle = routeDetails?.title.isNotEmpty == true
+          ? routeDetails!.title
+          : (routeDetails?.startEndStations.isNotEmpty == true
+              ? routeDetails!.startEndStations
+              : 'Маршрут №${matchedVehicle.routeName}');
+
+      return ScannedTransportInfo(
+        routeNumber: '№${matchedVehicle.routeName}',
+        routeTitle: routeTitle,
+        transportType: matchedVehicle.model.isNotEmpty ? matchedVehicle.model : 'ЛиАЗ 429260',
+        regNumber: matchedVehicle.formattedLicenseNumber,
+        carrier: 'ООО «Верхневолжское АТП»',
+        city: 'Тверь',
+        fare: 40,
+        rawQrData: rawQrData,
+        isIntercity: isIntercity,
+        startStation: currentStop,
+        endStation: endStation,
+        availableStations: stations.isNotEmpty ? stations : [currentStop, endStation],
+        routeId: matchedVehicle.routeId,
+        isLiveVehicle: true,
+      );
+    }
+
+    // 4. Офлайн Fallback (если автобус не на линии в GPS-потоке)
+    String route = '';
+    String reg = 'Автобус «Транспорт Верхневолжья»';
+    String type = 'ЛиАЗ 429260';
+    int rId = 0;
+    bool isIntercity = false;
+    String startStation = '';
+    String endStation = '';
+    String routeTitle = 'Выберите маршрут';
+    List<String> stations = [];
+
+    if (parsed.routeNumber != null) {
+      final numStr = parsed.routeNumber!;
+      route = numStr.startsWith('№') ? numStr : '№$numStr';
+      final digits = int.tryParse(numStr.replaceAll(RegExp(r'\D'), ''));
+      isIntercity = (digits != null && digits >= 100) || numStr.length >= 3;
+
+      final cleanRouteName = route.replaceAll('№', '').trim();
+      final matchingRoute = _cachedRoutes.firstWhere(
+        (r) => r.name == cleanRouteName,
+        orElse: () => const RouteModel(routeId: 0, name: '', title: ''),
+      );
+
+      if (matchingRoute.routeId != 0) {
+        rId = matchingRoute.routeId;
+        final routeDetails = await getRouteDetails(rId);
+        routeTitle = routeDetails?.title.isNotEmpty == true
+            ? routeDetails!.title
+            : (matchingRoute.title.isNotEmpty ? matchingRoute.title : 'Маршрут №$cleanRouteName');
+        stations = routeDetails?.stations.map((s) => s.name).toList() ?? [];
+        if (routeDetails?.finalStation.isNotEmpty == true) {
+          endStation = routeDetails!.finalStation;
+        }
+      }
+    }
+
+    return ScannedTransportInfo(
+      routeNumber: route,
+      routeTitle: routeTitle,
+      transportType: type,
+      regNumber: reg,
+      carrier: 'ООО «Верхневолжское АТП»',
+      city: 'Тверь',
+      fare: 40,
+      rawQrData: rawQrData,
+      isIntercity: isIntercity,
+      startStation: startStation,
+      endStation: endStation,
+      availableStations: stations,
+      routeId: rId,
+      isLiveVehicle: false,
+    );
+  }
 }
+

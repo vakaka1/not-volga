@@ -26,7 +26,6 @@ class _MainScreenState extends State<MainScreen> {
   late int _currentIndex;
   int _previousIndex = 1;
   bool _isMapSheetVisible = false;
-  late final List<Widget> _pages;
 
   // Состояние загрузки карты при старте приложения
   bool _isMapReady = false;
@@ -41,26 +40,6 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _previousIndex = widget.initialIndex;
-
-    _pages = [
-      const NewsScreen(),
-      MapScreen(
-        onSheetVisibilityChanged: (visible) {
-          if (_isMapSheetVisible != visible && mounted) {
-            setState(() {
-              _isMapSheetVisible = visible;
-            });
-          }
-        },
-        onMapReady: _onMapReady,
-      ),
-      PaymentQrScreen(
-        isActive: _currentIndex == 2,
-        onBack: () => _onTabSelected(_previousIndex == 2 ? 1 : _previousIndex),
-      ),
-      const ServicesScreen(),
-      const ProfileScreen(),
-    ];
 
     // Страховочный тайм-аут на случай задержек платформенного MapKit
     _safetyTimeoutTimer = Timer(const Duration(milliseconds: 3500), () {
@@ -122,8 +101,6 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool showBottomNav = !(_currentIndex == 1 && _isMapSheetVisible);
-
     return Stack(
       children: [
         // 1. Основное приложение с картой и нижней панелью
@@ -131,14 +108,30 @@ class _MainScreenState extends State<MainScreen> {
           backgroundColor: AppColors.bgMain,
           body: IndexedStack(
             index: _currentIndex,
-            children: _pages,
+            children: [
+              const NewsScreen(),
+              MapScreen(
+                onSheetVisibilityChanged: (visible) {
+                  if (_isMapSheetVisible != visible && mounted) {
+                    setState(() {
+                      _isMapSheetVisible = visible;
+                    });
+                  }
+                },
+                onMapReady: _onMapReady,
+              ),
+              PaymentQrScreen(
+                isActive: _currentIndex == 2,
+                onBack: () => _onTabSelected(_previousIndex == 2 ? 1 : _previousIndex),
+              ),
+              const ServicesScreen(),
+              const ProfileScreen(),
+            ],
           ),
-          bottomNavigationBar: showBottomNav
-              ? VolgaBottomNavBar(
-                  currentIndex: _currentIndex,
-                  onTap: _onTabSelected,
-                )
-              : null,
+          bottomNavigationBar: VolgaBottomNavBar(
+            currentIndex: _currentIndex,
+            onTap: _onTabSelected,
+          ),
         ),
 
         // 2. Страница загрузки (сплэш), поверх приложения во время старта

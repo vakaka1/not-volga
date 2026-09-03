@@ -15,6 +15,7 @@ class VehicleModel {
   final String nextStationName;
   final bool hasWheelchair;
   final String? qrNumber;
+  final String? qrUuid;
   final DateTime? timeLocation;
 
   const VehicleModel({
@@ -34,6 +35,7 @@ class VehicleModel {
     this.nextStationName = '',
     this.hasWheelchair = true,
     this.qrNumber,
+    this.qrUuid,
     this.timeLocation,
   });
 
@@ -42,6 +44,7 @@ class VehicleModel {
     final nextStationName = nextStationObj?['name'] as String? ?? '';
     final qrVehicleObj = json['qr_vehicle'] as Map<String, dynamic>?;
     final qrNumber = qrVehicleObj?['qr_number'] as String?;
+    final qrUuid = qrVehicleObj?['qr_uuid'] as String?;
 
     DateTime? parsedTime;
     final timeStr = json['time_location'] as String?;
@@ -68,6 +71,7 @@ class VehicleModel {
       nextStationName: nextStationName,
       hasWheelchair: true, // В Твери все современные автобусы «Транспорта Верхневолжья» оборудованы пандусом
       qrNumber: qrNumber,
+      qrUuid: qrUuid,
       timeLocation: parsedTime,
     );
   }

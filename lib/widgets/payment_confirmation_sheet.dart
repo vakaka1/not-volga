@@ -7,6 +7,7 @@ import '../theme/app_colors.dart';
 /// Parsed or simulated information from a scanned transport QR code.
 class ScannedTransportInfo {
   final String routeNumber;
+  final String routeTitle;
   final String transportType;
   final String regNumber;
   final String carrier;
@@ -22,6 +23,7 @@ class ScannedTransportInfo {
 
   const ScannedTransportInfo({
     required this.routeNumber,
+    this.routeTitle = '',
     this.transportType = 'ЛиАЗ 429260',
     this.regNumber = 'Е 456 КХ 69',
     this.carrier = 'ООО «Верхневолжское АТП»',
@@ -29,16 +31,10 @@ class ScannedTransportInfo {
     this.fare = 40,
     required this.rawQrData,
     this.isIntercity = false,
-    this.startStation = 'Мигалово',
-    this.endStation = 'Гипермаркет Леруа-Мерлен',
-    this.availableStations = const [
-      'Мигалово',
-      'Пролетарский район',
-      'Площадь Капошвара',
-      'Волоколамский путепровод',
-      'Гипермаркет Леруа-Мерлен',
-    ],
-    this.routeId = 12423,
+    this.startStation = '',
+    this.endStation = '',
+    this.availableStations = const [],
+    this.routeId = 0,
     this.isLiveVehicle = false,
   });
 
@@ -102,8 +98,20 @@ class ScannedTransportInfo {
       ];
     }
 
+    String title = 'Транспорт Верхневолжья';
+    if (route == '№33') {
+      title = 'Мигалово - Гипермаркет Леруа-Мерлен';
+    } else if (route == '№20') {
+      title = 'Энергоремонт - Мигалово';
+    } else if (route == '№24') {
+      title = 'ТЦ «Метро» - 1-я за линией';
+    } else if (intercity) {
+      title = 'Тверь - Конаково';
+    }
+
     return ScannedTransportInfo(
       routeNumber: route,
+      routeTitle: title,
       transportType: type,
       regNumber: reg,
       rawQrData: rawData,
