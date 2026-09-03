@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:not_volga/main.dart';
+import 'package:not_volga/screens/map_screen.dart';
 import 'package:not_volga/screens/main_screen.dart';
 import 'package:not_volga/screens/splash_screen.dart';
 import 'package:not_volga/widgets/volga_bottom_nav_bar.dart';
@@ -21,7 +22,7 @@ void main() {
     expect(find.byType(VolgaBottomNavBar), findsOneWidget);
 
     // Default tab is "Карта"
-    expect(find.text('ЗДЕСЬ БУДЕТ КАРТА'), findsOneWidget);
+    expect(find.byType(MapScreen), findsOneWidget);
 
     // All bottom bar items exist
     expect(find.text('Новости'), findsOneWidget);
@@ -57,6 +58,6 @@ void main() {
     // Tap "Карта" back
     await tester.tap(find.text('Карта'));
     await tester.pumpAndSettle();
-    expect(find.text('ЗДЕСЬ БУДЕТ КАРТА'), findsOneWidget);
+    expect(find.byType(MapScreen), findsOneWidget);
   });
 }

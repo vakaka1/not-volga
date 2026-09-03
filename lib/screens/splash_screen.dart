@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import '../constants/app_assets.dart';
+import '../services/merlin_transport_service.dart';
 import '../theme/app_colors.dart';
 import 'main_screen.dart';
 
@@ -41,24 +43,38 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Задержка и плавный переход на главный экран с нижней панелью навигации
-    Future.delayed(const Duration(milliseconds: 1800), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 400),
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const MainScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-          ),
-        );
-      }
-    });
+    // Предзагрузка офлайн карты и геопозиции во время сплэш-скрина
+    _preWarmMapData();
+  }
+
+  Future<void> _preWarmMapData() async {
+    // Параллельно инициализируем офлайн базу данных Твери
+    try {
+      MerlinTransportService().initOfflineData();
+      Geolocator.checkPermission().then((perm) async {
+        if (perm == LocationPermission.denied) {
+          await Geolocator.requestPermission();
+        }
+      }).catchError((_) {});
+    } catch (_) {}
+
+    await Future.delayed(const Duration(milliseconds: 1000));
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 300),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const MainScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          },
+        ),
+      );
+    }
   }
 
   @override

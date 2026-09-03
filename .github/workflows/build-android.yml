@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: 'gradle'
 
       - name: Set up Flutter
@@ -36,6 +36,13 @@ jobs:
 
       - name: Run unit tests
         run: flutter test
+
+      - name: Inject Yandex MapKit Key
+        env:
+          YANDEX_MAPKIT_API_KEY: ${{ secrets.YANDEX_MAPKIT_API_KEY }}
+        run: |
+          mkdir -p android
+          echo "yandex.mapkit.api.key=${YANDEX_MAPKIT_API_KEY}" >> android/local.properties
 
       - name: Build Android APK
         run: flutter build apk --debug
