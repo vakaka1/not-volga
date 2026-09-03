@@ -12,12 +12,12 @@ class VolgaBottomNavBar extends StatelessWidget {
     required this.onTap,
   });
 
-  static const List<({String title, String icon, bool isAction})> _items = [
-    (title: 'Новости', icon: AppAssets.icRootbmNews, isAction: false),
-    (title: 'Карта', icon: AppAssets.icRootbmMap, isAction: false),
-    (title: 'Оплата', icon: AppAssets.icRootbmActionQr, isAction: true),
-    (title: 'Сервисы', icon: AppAssets.icRootbmServices, isAction: false),
-    (title: 'Профиль', icon: AppAssets.icRootbmProfile, isAction: false),
+  static const List<({String title, String icon, double iconHeight, bool isAction})> _items = [
+    (title: 'Новости', icon: AppAssets.icRootbmNews, iconHeight: 25.0, isAction: false),
+    (title: 'Карта', icon: AppAssets.icRootbmMap, iconHeight: 20.0, isAction: false),
+    (title: 'Оплата', icon: AppAssets.icRootbmActionQr, iconHeight: 72.0, isAction: true),
+    (title: 'Сервисы', icon: AppAssets.icRootbmServices, iconHeight: 23.0, isAction: false),
+    (title: 'Профиль', icon: AppAssets.icRootbmProfile, iconHeight: 23.0, isAction: false),
   ];
 
   @override
@@ -42,7 +42,7 @@ class VolgaBottomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 58,
+          height: 56,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: List.generate(_items.length, (index) {
@@ -60,27 +60,28 @@ class VolgaBottomNavBar extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Positioned(
-                            top: -22,
+                            top: -16,
                             child: Image.asset(
                               item.icon,
-                              width: 82,
-                              height: 82,
+                              width: 72,
+                              height: 72,
                               fit: BoxFit.contain,
                             ),
                           ),
                           Positioned(
-                            bottom: 5,
+                            bottom: 6,
                             child: Text(
                               item.title,
                               style: TextStyle(
                                 fontFamily: 'NotoSans',
-                                fontSize: 10.5,
+                                fontSize: 10.0,
                                 fontWeight: isSelected
                                     ? FontWeight.w600
                                     : FontWeight.w500,
                                 color: isSelected
                                     ? AppColors.rootbmElementSelected
                                     : AppColors.rootbmElementTitle,
+                                height: 1.1,
                               ),
                             ),
                           ),
@@ -99,26 +100,31 @@ class VolgaBottomNavBar extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Image.asset(
-                          item.icon,
-                          height: 25,
-                          fit: BoxFit.contain,
-                          color: isSelected
-                              ? AppColors.rootbmElementSelected
-                              : AppColors.rootbmElementIcon,
+                        Container(
+                          height: 26,
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            item.icon,
+                            height: item.iconHeight,
+                            fit: BoxFit.contain,
+                            color: isSelected
+                                ? AppColors.rootbmElementSelected
+                                : AppColors.rootbmElementIcon,
+                          ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           item.title,
                           style: TextStyle(
                             fontFamily: 'NotoSans',
-                            fontSize: 10.5,
+                            fontSize: 10.0,
                             fontWeight: isSelected
                                 ? FontWeight.w600
                                 : FontWeight.w500,
                             color: isSelected
                                 ? AppColors.rootbmElementSelected
                                 : AppColors.rootbmElementTitle,
+                            height: 1.1,
                           ),
                         ),
                       ],
