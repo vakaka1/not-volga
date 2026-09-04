@@ -37,15 +37,6 @@ class VolgaBottomNavBar extends StatelessWidget {
                 ),
               )
             : null,
-        boxShadow: showTopBorder
-            ? const [
-                BoxShadow(
-                  color: Color(0x14000000),
-                  blurRadius: 8,
-                  offset: Offset(0, -2),
-                ),
-              ]
-            : null,
       ),
       child: SafeArea(
         top: false,

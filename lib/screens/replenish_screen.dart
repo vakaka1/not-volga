@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_assets.dart';
@@ -15,6 +16,7 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
   final TextEditingController _amountController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   int? _selectedPreset;
+  bool _isProcessing = false;
 
   final List<int> _presetAmounts = const [
     40,
@@ -54,6 +56,7 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
   }
 
   void _selectPreset(int amount) {
+    if (_isProcessing) return;
     setState(() {
       _selectedPreset = amount;
       _amountController.text = amount.toString();
@@ -68,9 +71,20 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
     return int.tryParse(text) ?? 0;
   }
 
-  void _submitReplenish() {
+  Future<void> _submitReplenish() async {
     final amount = _currentAmount;
-    if (amount <= 0) return;
+    if (amount <= 0 || _isProcessing) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isProcessing = true;
+    });
+
+    // Random duration between 3 and 5 seconds (3000 to 5000 ms)
+    final delayMs = 3000 + Random().nextInt(2001);
+    await Future.delayed(Duration(milliseconds: delayMs));
+
+    if (!mounted) return;
 
     // Add to balance service
     BalanceService.instance.addBalance(amount);
@@ -92,31 +106,35 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
   Widget build(BuildContext context) {
     final hasAmount = _currentAmount > 0;
 
-    return Scaffold(
-      backgroundColor: AppColors.bgMain,
-      body: SafeArea(
-        child: Column(
+    return PopScope(
+      canPop: !_isProcessing,
+      child: Scaffold(
+        backgroundColor: AppColors.bgMain,
+        body: Stack(
           children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Back button
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8.0, top: 8.0, bottom: 4.0),
-                      child: IconButton(
-                        icon: Image.asset(
-                          AppAssets.icToolbarBack,
-                          width: 22,
-                          height: 22,
-                          color: AppColors.black,
-                        ),
-                        splashRadius: 24,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ),
+            SafeArea(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Back button
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8.0, top: 8.0, bottom: 4.0),
+                            child: IconButton(
+                              icon: Image.asset(
+                                AppAssets.icToolbarBack,
+                                width: 22,
+                                height: 22,
+                                color: AppColors.black,
+                              ),
+                              splashRadius: 24,
+                              onPressed: _isProcessing ? null : () => Navigator.of(context).pop(),
+                            ),
+                          ),
 
                     // Title
                     const Padding(
@@ -185,6 +203,7 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
                         child: TextField(
                           controller: _amountController,
                           focusNode: _focusNode,
+                          enabled: !_isProcessing,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
@@ -236,7 +255,7 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: hasAmount ? _submitReplenish : null,
+                  onPressed: (hasAmount && !_isProcessing) ? _submitReplenish : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: hasAmount
                         ? const Color(0xFF3B5CFE)
@@ -259,7 +278,34 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
                 ),
               ),
             ),
+
+            // Loading overlay matching QR scanner connecting animation
+            if (_isProcessing) _buildConnectingOverlay(),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectingOverlay() {
+    return Positioned.fill(
+      child: AbsorbPointer(
+        child: Container(
+          color: const Color(0x33000000),
+          alignment: Alignment.center,
+          child: Container(
+            width: 68,
+            height: 68,
+            padding: const EdgeInsets.all(17),
+            decoration: BoxDecoration(
+              color: const Color(0xB3000000),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const CircularProgressIndicator(
+              strokeWidth: 3.5,
+              color: AppColors.qrContourYellow,
+            ),
+          ),
         ),
       ),
     );

@@ -43,7 +43,8 @@ void main() {
       expect(find.text('Пополнить'), findsOneWidget);
     });
 
-    testWidgets('Full flow: Services -> Balance details -> Replenish -> Success dialog -> Updated balance',
+    testWidgets(
+        'Full flow: Services -> Balance details -> Replenish -> Loading animation -> Updated balance (no dialog)',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -88,20 +89,20 @@ void main() {
 
       // Submit replenishment
       await tester.tap(find.widgetWithText(ElevatedButton, 'Пополнить'));
-      await tester.pumpAndSettle();
+      await tester.pump();
 
-      // Returned to ServicesScreen and success dialog is shown
+      // Loading overlay is visible while processing
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // Advance through random 3-5s duration and navigation transition
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Returned to ServicesScreen directly without dialog
       expect(find.byType(ServicesScreen), findsOneWidget);
-      expect(find.text('Баланс успешно пополнен!'), findsOneWidget);
-      expect(find.text('Сумма пополнения: 160 ₽'), findsOneWidget);
-      expect(find.text('OK'), findsOneWidget);
-
-      // Dismiss success dialog
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-
-      // Dialog is gone, updated balance 160 ₽ is displayed
       expect(find.text('Баланс успешно пополнен!'), findsNothing);
+
+      // Updated balance 160 ₽ is displayed
       expect(find.text('160 ₽'), findsOneWidget);
     });
   });

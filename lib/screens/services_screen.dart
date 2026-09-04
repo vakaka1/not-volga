@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../constants/app_assets.dart';
 import '../services/balance_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/service_card_icons.dart';
@@ -20,83 +19,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Future<void> _openBalanceDetails() async {
-    final replenishedAmount = await Navigator.of(context).push<int>(
+    await Navigator.of(context).push<int>(
       MaterialPageRoute(
         builder: (context) => const BalanceDetailsScreen(),
       ),
-    );
-
-    if (replenishedAmount != null && mounted) {
-      _showSuccessDialog(replenishedAmount);
-    }
-  }
-
-  void _showSuccessDialog(int amount) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: AppColors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4.0),
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(24.0, 24.0, 24.0, 0.0),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset(
-                AppAssets.icOk,
-                width: 56,
-                height: 56,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Баланс успешно пополнен!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'NotoSans',
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Сумма пополнения: $amount ₽',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: 'NotoSans',
-                  fontSize: 15,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF165AF0),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                'OK',
-                style: TextStyle(
-                  fontFamily: 'NotoSans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 
