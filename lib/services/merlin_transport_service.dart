@@ -11,6 +11,7 @@ import '../models/transport/station_model.dart';
 import '../models/transport/vehicle_model.dart';
 import '../services/qr_payload_parser.dart';
 import '../widgets/payment_confirmation_sheet.dart';
+import '../services/tariff_service.dart';
 
 class MerlinTransportService {
   static const String baseUrl = 'https://api.merlin.tvercard.ru/api/client/v1';
@@ -69,7 +70,30 @@ class MerlinTransportService {
           }
         });
       }
+
+      // 4. Загрузка всех деталей маршрутов с реальными остановками Твери
+      if (_cachedRouteDetails.isEmpty) {
+        final detailsJsonStr = await rootBundle.loadString('assets/data/tver_route_details.json');
+        final Map<String, dynamic> detailsData = jsonDecode(detailsJsonStr);
+        detailsData.forEach((key, val) {
+          final rId = int.tryParse(key);
+          if (rId != null && val is Map<String, dynamic>) {
+            _cachedRouteDetails[rId] = RouteDetailsModel.fromJson(val);
+          }
+        });
+      }
     } catch (_) {}
+  }
+
+  /// Предзагрузка деталей всех маршрутов для офлайн-режима
+  Future<void> preCacheAllRouteDetails() async {
+    for (final route in _cachedRoutes) {
+      if (!_cachedRouteDetails.containsKey(route.routeId)) {
+        try {
+          await getRouteDetails(route.routeId);
+        } catch (_) {}
+      }
+    }
   }
 
   /// Получить все остановки (из кэша или с сервера)
@@ -138,13 +162,12 @@ class MerlinTransportService {
       ),
     );
 
-    final subStations = _cachedStations.take(15).toList();
     final fallbackDetails = RouteDetailsModel(
       routeId: route.routeId,
       name: route.name,
       title: route.title,
       startEndStations: route.startEndStations,
-      stations: subStations,
+      stations: [],
     );
 
     _cachedRouteDetails[routeId] = fallbackDetails;
@@ -184,6 +207,54 @@ class MerlinTransportService {
     return [];
   }
 
+  /// Расчёт расстояния между двумя остановками маршрута (в км)
+  double computeDistanceBetweenStations(int routeId, String fromStation, String toStation) {
+    StationModel? from;
+    StationModel? to;
+    
+    // 1. Ищем в деталях конкретного маршрута
+    final details = _cachedRouteDetails[routeId];
+    if (details != null) {
+      for (final s in details.stations) {
+        if (s.name == fromStation && from == null) from = s;
+        if (s.name == toStation && to == null) to = s;
+      }
+    }
+    
+    // 2. Если не найдены — ищем по всем деталям маршрутов
+    if (from == null || to == null) {
+      for (final d in _cachedRouteDetails.values) {
+        for (final s in d.stations) {
+          if (s.name == fromStation && from == null) from = s;
+          if (s.name == toStation && to == null) to = s;
+        }
+        if (from != null && to != null) break;
+      }
+    }
+
+    // 3. Если всё ещё не найдены — ищем в общем реестре остановок
+    if (from == null || to == null) {
+      for (final s in _cachedStations) {
+        if (s.name == fromStation && from == null) from = s;
+        if (s.name == toStation && to == null) to = s;
+      }
+    }
+
+    if (from == null || to == null) return 0.0;
+    return TariffService.haversineDistanceKm(from.lat, from.lng, to.lat, to.lng);
+  }
+
+  /// Поиск деталей маршрута по имени (номеру) маршрута
+  RouteDetailsModel? getRouteDetailsByName(String routeName) {
+    final clean = routeName.replaceAll('№', '').trim();
+    for (final details in _cachedRouteDetails.values) {
+      if (details.name.toLowerCase() == clean.toLowerCase() && details.stations.isNotEmpty) {
+        return details;
+      }
+    }
+    return null;
+  }
+
   /// Получить живые автобусы в видимой области карты
   Future<List<VehicleModel>> getVehicles({
     required double topLat,
@@ -221,86 +292,14 @@ class MerlinTransportService {
   List<VehicleModel> _cachedVehicles = [];
   List<VehicleModel> get cachedVehicles => _cachedVehicles;
 
-  static const Map<String, ({String license, String board, String model})> realTverFleet = {
-    '6': (license: 'H744CP69', board: '10154', model: 'ЛиАЗ 429260'),
-    '2': (license: 'C033CP69', board: '10277', model: 'ЛиАЗ 429260'),
-    '33': (license: 'H773CP69', board: '10164', model: 'ЛиАЗ 429260'),
-    '21': (license: 'O059CP69', board: '10537', model: 'ЛиАЗ 529265'),
-    '1': (license: 'C024CP69', board: '10252', model: 'ЛиАЗ 429260'),
-    '7': (license: 'Y776CO69', board: '10037', model: 'ЛиАЗ 429260'),
-    '9': (license: 'C063CP69', board: '10600', model: 'ЛиАЗ 529265'),
-    '12': (license: 'O020CP69', board: '10202', model: 'ЛиАЗ 429260'),
-    '14': (license: 'O080CB69', board: '20002', model: 'МАЗ 206'),
-    '20': (license: 'O122CP69', board: '10550', model: 'ЛиАЗ 529265'),
-    '24': (license: 'M842TT69', board: '10115', model: 'ЛиАЗ 429260'),
-    '27': (license: 'H362CP69', board: '10094', model: 'ЛиАЗ 429260'),
-    '30': (license: 'H234CP69', board: '10501', model: 'ЛиАЗ 529265'),
-    '31': (license: 'Y658CO69', board: '10013', model: 'ЛиАЗ 429260'),
-    '36': (license: 'O039CP69', board: '10531', model: 'ЛиАЗ 529265'),
-    '42': (license: 'O148CP69', board: '10570', model: 'ЛиАЗ 529265'),
-    '51': (license: 'C030CP69', board: '10253', model: 'ЛиАЗ 429260'),
-    '52': (license: 'O141CP69', board: '10193', model: 'ЛиАЗ 429260'),
-    '55': (license: 'O780CP69', board: '10270', model: 'ЛиАЗ 429260'),
-    '106': (license: 'O669CP69', board: '10213', model: 'ЛиАЗ 429260'),
-    '107': (license: 'O131CP69', board: '10552', model: 'ЛиАЗ 529265'),
-    '110': (license: 'H648CP69', board: '10136', model: 'ЛиАЗ 429260'),
-    '111': (license: 'H253CP69', board: '10065', model: 'ЛиАЗ 429260'),
-    '114': (license: 'O146CP69', board: '10194', model: 'ЛиАЗ 429260'),
-    '116': (license: 'AH86169', board: '40005', model: 'ПАЗ 320435-04'),
-    '118': (license: 'H302CP69', board: '10077', model: 'ЛиАЗ 429260'),
-    '123': (license: 'AH90569', board: '40020', model: 'ПАЗ 320435-04'),
-    '125': (license: 'O639CP69', board: '10223', model: 'ЛиАЗ 429260'),
-    '126': (license: 'H652CP69', board: '10157', model: 'ЛиАЗ 429260'),
-    '130': (license: 'H256CP69', board: '10111', model: 'ЛиАЗ 429260'),
-    '135': (license: 'H298CP69', board: '10076', model: 'ЛиАЗ 429260'),
-    '138': (license: 'H243CP69', board: '10061', model: 'ЛиАЗ 429260'),
-    '202': (license: 'AH85969', board: '40003', model: 'ПАЗ 320435-04'),
-    '204': (license: 'A043CC69', board: '20021', model: 'МАЗ 206'),
-    '208': (license: 'Y796CO69', board: '10041', model: 'ЛиАЗ 429260'),
-    '223': (license: 'C105CP69', board: '10280', model: 'ЛиАЗ 429260'),
-    '227': (license: 'A074CC69', board: '20026', model: 'МАЗ 206'),
-    '233': (license: 'O734CP69', board: '10265', model: 'ЛиАЗ 429260'),
-  };
-
   VehicleModel? getLiveVehicleForRoute(String routeName) {
     final clean = routeName.replaceAll('№', '').trim();
-    // 1. Живая телеметрия из текущего запроса GET /vehicles
     for (final v in _cachedVehicles) {
       if (v.routeName == clean && v.licenseNumber.isNotEmpty) {
         return v;
       }
     }
-    // 2. Реальный борт из официального реестра Тверского автопарка
-    final fleetBus = realTverFleet[clean];
-    if (fleetBus != null) {
-      return VehicleModel(
-        vehicleId: 'tver-${fleetBus.board}',
-        boardNumber: fleetBus.board,
-        licenseNumber: fleetBus.license,
-        model: fleetBus.model,
-        routeId: 0,
-        routeName: clean,
-        lat: 56.85,
-        lng: 35.90,
-      );
-    }
-    // 3. Любой активный автобус из живого потока
-    if (_cachedVehicles.isNotEmpty) {
-      for (final v in _cachedVehicles) {
-        if (v.licenseNumber.isNotEmpty) return v;
-      }
-    }
-    // 4. Эталонный борт автопарка Твери
-    return const VehicleModel(
-      vehicleId: 'tver-10154',
-      boardNumber: '10154',
-      licenseNumber: 'H744CP69',
-      model: 'ЛиАЗ 429260',
-      routeId: 0,
-      routeName: '6',
-      lat: 56.85,
-      lng: 35.90,
-    );
+    return null;
   }
 
   /// Получить прогноз прибытия транспорта на остановку
@@ -344,40 +343,7 @@ class MerlinTransportService {
       }
     } catch (_) {}
 
-    // Офлайн-расписание для остановки
-    final now = DateTime.now();
-    final sampleRoutes = ['20', '21', '107', '1', '41'];
-    final fallbackList = sampleRoutes.map((rName) {
-      final lic = vehicleLicenseByRoute?[rName] ?? 'Н ${100 + (rName.hashCode.abs() % 800)} СР 69';
-      final mins = (5 + (rName.hashCode.abs() % 10));
-      final nextMins = mins + 8;
-      return StationArrivalModel(
-        routeId: rName.hashCode.abs() % 100,
-        routeName: rName,
-        endStation: 'Конечная',
-        estimatedArrivals: [
-          now.add(Duration(minutes: mins)),
-          now.add(Duration(minutes: nextMins)),
-        ],
-        hasWheelchair: true,
-        licenseNumber: lic,
-      );
-    }).toList();
-
-    fallbackList.sort((a, b) {
-      final aTime = a.estimatedArrivals.isNotEmpty ? a.estimatedArrivals.first : null;
-      final bTime = b.estimatedArrivals.isNotEmpty ? b.estimatedArrivals.first : null;
-      if (aTime != null && bTime != null) {
-        return aTime.compareTo(bTime);
-      } else if (aTime != null) {
-        return -1;
-      } else if (bTime != null) {
-        return 1;
-      }
-      return a.routeName.compareTo(b.routeName);
-    });
-
-    return fallbackList;
+    return [];
   }
 
   /// Проверка доступности API (пингуем легковесный эндпоинт)
@@ -537,11 +503,11 @@ class MerlinTransportService {
       return ScannedTransportInfo(
         routeNumber: '№${matchedVehicle.routeName}',
         routeTitle: routeTitle,
-        transportType: matchedVehicle.model.isNotEmpty ? matchedVehicle.model : 'ЛиАЗ 429260',
+        transportType: matchedVehicle.model,
         regNumber: matchedVehicle.formattedLicenseNumber,
         carrier: carrier,
         city: 'Тверь',
-        fare: 40,
+        fare: 0,
         rawQrData: rawQrData,
         isIntercity: isIntercity,
         startStation: currentStop,
@@ -556,7 +522,7 @@ class MerlinTransportService {
     // 4. Офлайн Fallback (если автобус не на линии в GPS-потоке)
     String route = '';
     String reg = '';
-    String type = 'ЛиАЗ 429260';
+    String type = '';
     int rId = 0;
     bool isIntercity = false;
     String startStation = '';
@@ -594,9 +560,9 @@ class MerlinTransportService {
       routeTitle: routeTitle,
       transportType: type,
       regNumber: reg,
-      carrier: 'ООО «Верхневолжское АТП»',
+      carrier: '',
       city: 'Тверь',
-      fare: 40,
+      fare: 0,
       rawQrData: rawQrData,
       isIntercity: isIntercity,
       startStation: startStation,

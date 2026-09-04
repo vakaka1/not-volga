@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../constants/app_assets.dart';
 import '../services/balance_service.dart';
+import '../services/merlin_transport_service.dart';
+import '../services/tariff_service.dart';
 import '../services/ticket_service.dart';
 import '../theme/app_colors.dart';
 import 'insufficient_funds_dialog.dart';
@@ -42,89 +44,7 @@ class ScannedTransportInfo {
     this.boardNumber = '',
   });
 
-  factory ScannedTransportInfo.fromRawData(String rawData) {
-    String route = '№24';
-    String reg = 'М 842 ТТ 69';
-    String type = 'ЛиАЗ 429260';
-    bool intercity = false;
-    String start = 'Мигалово';
-    String end = 'Гипермаркет Леруа-Мерлен';
-    List<String> stations = [
-      'Мигалово',
-      'Пролетарский район',
-      'Площадь Капошвара',
-      'Волоколамский путепровод',
-      'Гипермаркет Леруа-Мерлен',
-    ];
 
-    final clean = rawData.trim();
-    final lower = clean.toLowerCase();
-
-    if (lower.contains('route=') || lower.contains('marshrut=')) {
-      final match = RegExp(r'(?:route|marshrut)=([a-zA-Z0-9а-яА-Я]+)').firstMatch(clean);
-      if (match != null && match.group(1) != null) {
-        final rName = match.group(1)!;
-        route = '№$rName';
-        final digits = int.tryParse(rName.replaceAll(RegExp(r'\D'), ''));
-        intercity = (digits != null && digits >= 100) || rName.length >= 3;
-      }
-    } else if (RegExp(r'^\d{1,3}[а-яА-Я]?$').hasMatch(clean)) {
-      route = '№$clean';
-      final digits = int.tryParse(clean.replaceAll(RegExp(r'\D'), ''));
-      intercity = (digits != null && digits >= 100) || clean.length >= 3;
-    } else if (clean.contains('7c50232b') || clean.contains('69-0391') || clean.contains('10391')) {
-      // Борт 10391 с фото qr-code.webp (ЛиАЗ-4292.60)
-      route = '№33';
-      reg = 'С 128 СР 69';
-      type = 'ЛиАЗ 429260';
-      intercity = false;
-      start = 'Мигалово';
-      end = 'Гипермаркет Леруа-Мерлен';
-    } else {
-      final hash = clean.hashCode.abs();
-      final routes = ['№1', '№3', '№6', '№9', '№15', '№20', '№21', '№24', '№30', '№33', '№42', '№108', '№154', '№208'];
-      final regNumbers = ['Е 456 КХ 69', 'В 789 АА 69', 'К 123 ОО 69', 'М 842 ТТ 69', 'О 911 РР 69', 'С 128 СР 69'];
-      route = routes[hash % routes.length];
-      reg = regNumbers[hash % regNumbers.length];
-      final digits = int.tryParse(route.replaceAll(RegExp(r'\D'), ''));
-      intercity = (digits != null && digits >= 100);
-    }
-
-    if (intercity) {
-      start = 'Автовокзал (Тверь)';
-      end = 'Даниловское / Конаково';
-      stations = [
-        'Автовокзал (Тверь)',
-        'Эммаусс',
-        'Городня',
-        'Редкино',
-        'Даниловское / Конаково',
-      ];
-    }
-
-    String title = 'Транспорт Верхневолжья';
-    if (route == '№33') {
-      title = 'Мигалово - Гипермаркет Леруа-Мерлен';
-    } else if (route == '№20') {
-      title = 'Энергоремонт - Мигалово';
-    } else if (route == '№24') {
-      title = 'ТЦ «Метро» - 1-я за линией';
-    } else if (intercity) {
-      title = 'Тверь - Конаково';
-    }
-
-    return ScannedTransportInfo(
-      routeNumber: route,
-      routeTitle: title,
-      transportType: type,
-      regNumber: reg,
-      rawQrData: rawData,
-      isIntercity: intercity,
-      startStation: start,
-      endStation: end,
-      availableStations: stations,
-    );
-  }
 }
 
 /// Modal bottom sheet shown upon detecting a QR code for trip ticket purchase.
@@ -188,21 +108,23 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
 
   int _computeFare() {
     if (!widget.transportInfo.isIntercity) {
-      return 40; // Фиксированный городской тариф Твери
+      return TariffService.instance.getCityFare(locationId: 1);
     }
-
-    // Для пригородного/междугороднего маршрута расчёт по количеству остановок
+    // Для пригородного маршрута — расчёт по расстоянию
     final stations = widget.transportInfo.availableStations;
     final startIndex = stations.indexOf(_selectedStartStation);
     final endIndex = stations.indexOf(_selectedEndStation);
-
     if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
-      final diff = endIndex - startIndex;
-      final fare = 40 + (diff * 5);
-      return fare.clamp(40, 130);
+      final distanceKm = MerlinTransportService().computeDistanceBetweenStations(
+        widget.transportInfo.routeId,
+        _selectedStartStation,
+        _selectedEndStation,
+      );
+      if (distanceKm > 0) {
+        return TariffService.instance.computeSuburbanFare(distanceKm);
+      }
     }
-
-    return 40;
+    return TariffService.instance.getCityFare(locationId: 1);
   }
 
   void _onStartStationChanged(String? val) {
@@ -614,7 +536,14 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
           // Начальная остановка
           Row(
             children: [
-              const Icon(Icons.radio_button_checked, size: 18, color: Color(0xFF3B5CFE)),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF3B5CFE),
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 8),
               const Text(
                 'Откуда:',
@@ -656,7 +585,14 @@ class _PaymentConfirmationSheetState extends State<PaymentConfirmationSheet> {
           // Конечная остановка
           Row(
             children: [
-              const Icon(Icons.location_on, size: 18, color: Color(0xFFDC2626)),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDC2626),
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 8),
               const Text(
                 'Куда:',

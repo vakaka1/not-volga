@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/transport/route_model.dart';
 import '../services/balance_service.dart';
 import '../services/merlin_transport_service.dart';
+import '../services/tariff_service.dart';
 import '../services/ticket_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/insufficient_funds_dialog.dart';
 import '../widgets/qr_payment_ok_dialog.dart';
 
-/// Screen for selecting the current stop in offline/ticket constructor mode.
-/// After selecting the stop and clicking "Со счета", it deducts the fare,
-/// forms the ticket, and shows the official QrPaymentOkDialog just like after scanning.
+/// Экран выбора остановки для конструктора/офлайн-режима.
+/// Используется как fallback, если QrRoutePaymentScreen не может быть показан напрямую.
 class SelectStopScreen extends StatefulWidget {
   final String routeNumber;
   final String licensePlate;
@@ -34,6 +34,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
   String _routeTitle = '';
   bool _isLoading = true;
   bool _isPaying = false;
+  int _fare = 0;
 
   @override
   void initState() {
@@ -80,22 +81,20 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
       }
     }
 
-    // If route details had no stations, fallback to all cached stations or defaults
+    // Fallback: все остановки из кэша (без привязки к маршруту)
     if (stations.isEmpty && service.cachedStations.isNotEmpty) {
       stations = service.cachedStations.map((s) => s.name).toList();
     }
 
-    if (stations.isEmpty) {
-      stations = [
-        'Мигалово',
-        'Пролетарский район',
-        'Площадь Капошвара',
-        'Площадь Терешковой',
-        'Волоколамский путепровод',
-        'Южный',
-        'Улица Левитана',
-        'Железнодорожный вокзал',
-      ];
+    // Определяем стоимость
+    final isTransfer = TicketService.instance.canMakeTransfer(
+      transferDurationMinutes: TariffService.instance.getTransferDurationMinutes(),
+    );
+    int fare;
+    if (isTransfer) {
+      fare = TariffService.instance.getTransferFare();
+    } else {
+      fare = TariffService.instance.getCityFare();
     }
 
     if (mounted) {
@@ -103,6 +102,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
         _routeTitle = title;
         _routeStations = stations;
         _filteredStations = stations;
+        _fare = fare;
         if (_selectedStation.isEmpty && stations.isNotEmpty) {
           _selectedStation = stations.first;
         }
@@ -133,9 +133,8 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
     }
 
     final balance = BalanceService.instance.balance;
-    const fare = 40;
 
-    if (balance < fare) {
+    if (balance < _fare) {
       InsufficientFundsDialog.show(context);
       return;
     }
@@ -145,20 +144,25 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
     });
 
     await Future.delayed(const Duration(milliseconds: 300));
-    await BalanceService.instance.setBalance(balance - fare);
+    await BalanceService.instance.setBalance(balance - _fare);
 
     final cleanRoute = widget.routeNumber.replaceAll('№', '').trim();
     final formattedPlate = formatRussianLicensePlate(widget.licensePlate);
+
+    final isTransfer = TicketService.instance.canMakeTransfer(
+      transferDurationMinutes: TariffService.instance.getTransferDurationMinutes(),
+    );
 
     await TicketService.instance.createTicket(
       routeNumber: cleanRoute,
       routeTitle: _routeTitle,
       station: _selectedStation,
-      fare: fare,
-      licenseNumber: formattedPlate.isNotEmpty ? formattedPlate : 'Н 744 СР 69',
-      boardNumber: '10154',
-      carrierName: 'ООО "Верхневолжское автотранспортное предприятие"',
-      vehicleModel: 'ЛиАЗ 429260',
+      fare: _fare,
+      licenseNumber: formattedPlate.isNotEmpty ? formattedPlate : '',
+      boardNumber: '',
+      carrierName: '',
+      vehicleModel: '',
+      isTransfer: isTransfer,
     );
 
     if (mounted) {
@@ -166,11 +170,9 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
         _isPaying = false;
       });
 
-      // Show the exact same dialog as scanned QR code
-      await QrPaymentOkDialog.show(context, fare: fare);
+      await QrPaymentOkDialog.show(context, fare: _fare);
 
       if (mounted) {
-        // Return true to dismiss the constructor flow and navigate to active ticket on Map
         Navigator.of(context).pop(true);
       }
     }
@@ -203,7 +205,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Route & Plate summary card
+            // Карточка маршрута
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
               child: Container(
@@ -254,17 +256,17 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
                               color: Color(0xFF111217),
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.licensePlate.isNotEmpty
-                                ? 'Гос номер: ${formatRussianLicensePlate(widget.licensePlate)}'
-                                : 'Гос номер не указан',
-                            style: const TextStyle(
-                              fontFamily: 'NotoSans',
-                              fontSize: 12,
-                              color: Color(0xFF64748B),
+                          if (widget.licensePlate.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Гос номер: ${formatRussianLicensePlate(widget.licensePlate)}',
+                              style: const TextStyle(
+                                fontFamily: 'NotoSans',
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -273,7 +275,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
               ),
             ),
 
-            // Search bar
+            // Поиск
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
               child: Container(
@@ -288,7 +290,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
                   controller: _searchController,
                   decoration: const InputDecoration(
                     icon: Icon(Icons.search, color: Color(0xFF94A3B8), size: 22),
-                    hintText: 'Поиск текущей остановки...',
+                    hintText: 'Поиск остановки...',
                     hintStyle: TextStyle(
                       fontFamily: 'NotoSans',
                       color: Color(0xFF94A3B8),
@@ -302,7 +304,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
               ),
             ),
 
-            // Stations list
+            // Список остановок
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B5CFE)))
@@ -340,10 +342,14 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      Icons.location_on_rounded,
-                                      size: 20,
-                                      color: isSelected ? const Color(0xFF3B5CFE) : const Color(0xFF94A3B8),
+                                    // Точка вместо иконки
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? const Color(0xFF3B5CFE) : const Color(0xFF94A3B8),
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -371,7 +377,7 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
                         ),
             ),
 
-            // Bottom section: Fare & "Со счета" button
+            // Стоимость и кнопка оплаты
             Container(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
               decoration: BoxDecoration(
@@ -398,9 +404,9 @@ class _SelectStopScreenState extends State<SelectStopScreen> {
                           color: Color(0xFF64748B),
                         ),
                       ),
-                      const Text(
-                        '40 ₽',
-                        style: TextStyle(
+                      Text(
+                        '$_fare ₽',
+                        style: const TextStyle(
                           fontFamily: 'NotoSans',
                           fontSize: 20,
                           fontWeight: FontWeight.bold,

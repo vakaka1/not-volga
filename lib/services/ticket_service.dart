@@ -55,6 +55,7 @@ class ActiveTicket {
   final String boardNumber;         // Board number: "10106"
   final String carrierName;         // E.g. "ООО \"Верхневолжское автотранспортное предприятие\""
   final String vehicleModel;        // Vehicle model: "ЛиАЗ 429260"
+  final bool isTransfer;
 
   ActiveTicket({
     required this.id,
@@ -70,6 +71,7 @@ class ActiveTicket {
     required this.boardNumber,
     required this.carrierName,
     required this.vehicleModel,
+    this.isTransfer = false,
   });
 
   /// Official checker URL matching Tver transport validation system
@@ -101,6 +103,7 @@ class TicketService extends ChangeNotifier {
   static const String _keyBoardNumber = 'ticket_board_number';
   static const String _keyCarrierName = 'ticket_carrier_name';
   static const String _keyVehicleModel = 'ticket_vehicle_model';
+  static const String _keyIsTransfer = 'ticket_is_transfer';
 
   ActiveTicket? _activeTicket;
   Timer? _expiryTimer;
@@ -109,6 +112,13 @@ class TicketService extends ChangeNotifier {
   ActiveTicket? get activeTicket => _activeTicket;
   bool get hasActiveTicket => _activeTicket != null && !_activeTicket!.isExpired;
   bool get isLoaded => _isLoaded;
+
+  /// Проверяет возможность пересадки: есть активный билет и прошло менее N минут
+  bool canMakeTransfer({int transferDurationMinutes = 60}) {
+    if (_activeTicket == null || _activeTicket!.isExpired) return false;
+    final elapsed = DateTime.now().difference(_activeTicket!.purchaseTime);
+    return elapsed.inMinutes < transferDurationMinutes;
+  }
 
   Future<void> init({bool force = false}) async {
     if (_isLoaded && !force) return;
@@ -132,6 +142,7 @@ class TicketService extends ChangeNotifier {
           final boardNumber = prefs.getString(_keyBoardNumber) ?? '';
           final carrierName = prefs.getString(_keyCarrierName) ?? 'ООО "Верхневолжское автотранспортное предприятие"';
           final vehicleModel = prefs.getString(_keyVehicleModel) ?? 'ЛиАЗ 429260';
+          final isTransfer = prefs.getBool(_keyIsTransfer) ?? false;
 
           _activeTicket = ActiveTicket(
             id: id,
@@ -147,6 +158,7 @@ class TicketService extends ChangeNotifier {
             boardNumber: boardNumber,
             carrierName: carrierName,
             vehicleModel: vehicleModel,
+            isTransfer: isTransfer,
           );
           _scheduleExpiryTimer(expiryTime.difference(now));
           await TripHistoryService.instance.ensureTicketInHistory(_activeTicket!);
@@ -173,6 +185,7 @@ class TicketService extends ChangeNotifier {
     String? carrierName,
     String? vehicleModel,
     Duration duration = const Duration(hours: 2),
+    bool isTransfer = false,
   }) async {
     final now = DateTime.now();
     final expiry = now.add(duration);
@@ -202,6 +215,7 @@ class TicketService extends ChangeNotifier {
       boardNumber: bNum,
       carrierName: carrier,
       vehicleModel: model,
+      isTransfer: isTransfer,
     );
 
     try {
@@ -223,6 +237,7 @@ class TicketService extends ChangeNotifier {
       await prefs.setString(_keyBoardNumber, bNum);
       await prefs.setString(_keyCarrierName, carrier);
       await prefs.setString(_keyVehicleModel, model);
+      await prefs.setBool(_keyIsTransfer, isTransfer);
     } catch (e) {
       debugPrint('TicketService.createTicket error: $e');
     }
@@ -274,6 +289,7 @@ class TicketService extends ChangeNotifier {
       await prefs.remove(_keyBoardNumber);
       await prefs.remove(_keyCarrierName);
       await prefs.remove(_keyVehicleModel);
+      await prefs.remove(_keyIsTransfer);
     } catch (_) {}
   }
 

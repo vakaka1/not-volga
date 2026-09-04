@@ -7,6 +7,8 @@ import '../screens/ticket_constructor_screen.dart';
 import '../services/balance_service.dart';
 import '../services/merlin_transport_service.dart';
 import '../services/qr_payload_parser.dart';
+import '../services/tariff_service.dart';
+import '../services/ticket_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/insufficient_funds_dialog.dart';
 import '../widgets/qr_scanner_overlay.dart';
@@ -138,8 +140,14 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   void _onDetect(BarcodeCapture capture) {
     if (_isProcessing || _isErrorDialogShowing) return;
 
-    // Minimum balance for Tver is 40 rubles: do not scan/proceed if insufficient
-    if (BalanceService.instance.balance < 40) {
+    // Минимальная проверка баланса (учитываем пересадку)
+    final isTransfer = TicketService.instance.canMakeTransfer(
+      transferDurationMinutes: TariffService.instance.getTransferDurationMinutes(),
+    );
+    final minFare = isTransfer
+        ? TariffService.instance.getTransferFare()
+        : TariffService.instance.getCityFare();
+    if (BalanceService.instance.balance < minFare) {
       _showInsufficientFundsDialog();
       return;
     }
@@ -169,7 +177,7 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   }
 
   Future<void> _openPaymentSheet(String qrData) async {
-    // Try reaching the API up to 5 times for offline protection
+    // Пытаемся достучаться до API до 5 раз
     final apiResult = await MerlinTransportService().resolveVehicleWithRetry(
       qrData,
       maxAttempts: 5,
@@ -177,7 +185,7 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
 
     if (!mounted) return;
 
-    // If API could not be reached after 5 attempts -> redirect to Ticket Constructor!
+    // 1.3. Нет интернета → конструктор билета в офлайн-режиме
     if (!apiResult.isApiAvailable) {
       await _stopCamera();
       if (!mounted) return;
@@ -195,12 +203,12 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
           builder: (context) => TicketConstructorScreen(
             initialRouteNumber: initRoute,
             initialLicensePlate: initPlate,
+            isOfflineMode: true,
           ),
         ),
       );
 
       if (result == true) {
-        // Ticket successfully created in constructor
         if (widget.onPaymentSuccess != null) {
           widget.onPaymentSuccess!();
         } else {
@@ -222,8 +230,9 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
     }
 
     final transportInfo = apiResult.transportInfo;
-    if (transportInfo == null) {
 
+    // Невалидный QR-код
+    if (transportInfo == null) {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -265,7 +274,47 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
       return;
     }
 
-    // Pause camera while payment route screen is shown
+    // 1.2. Автобус не полностью определён → конструктор с pre-fill
+    final routeNum = transportInfo.routeNumber.replaceAll('№', '').trim();
+    final hasRoute = routeNum.isNotEmpty;
+    final hasReg = transportInfo.regNumber.isNotEmpty;
+
+    if (!hasRoute || !hasReg) {
+      await _stopCamera();
+      if (!mounted) return;
+
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => TicketConstructorScreen(
+            initialRouteNumber: hasRoute ? routeNum : null,
+            initialLicensePlate: hasReg ? transportInfo.regNumber : null,
+            isOfflineMode: false,
+          ),
+        ),
+      );
+
+      if (result == true) {
+        if (widget.onPaymentSuccess != null) {
+          widget.onPaymentSuccess!();
+        } else {
+          _handleBack();
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _detectedBarcodes = [];
+          _isProcessing = false;
+        });
+        if (widget.isActive) {
+          await _startCamera();
+        }
+      }
+      return;
+    }
+
+    // 1.1. Всё определилось → экран оплаты
     await _stopCamera();
 
     if (!mounted) return;
@@ -279,8 +328,6 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
     );
 
     if (result == true) {
-      // Payment completed and passenger dismissed confirmation dialog.
-      // Redirect to Map as requested!
       if (widget.onPaymentSuccess != null) {
         widget.onPaymentSuccess!();
       } else {
