@@ -82,7 +82,7 @@ class VolgaRouteBadge extends StatelessWidget {
           Positioned(
             left: 7.0,
             child: Image.asset(
-              'assets/icons/ic_routes_bus_tight.png',
+              AppAssets.icRoutesBusTight,
               width: 17.0,
               height: 20.0,
               color: Colors.white,

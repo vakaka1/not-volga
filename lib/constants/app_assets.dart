@@ -13,6 +13,7 @@ abstract class AppAssets {
 
   // Icons
   static const String icBus = 'assets/icons/ic_bus.png';
+  static const String icRoutesBusTight = 'assets/icons/ic_routes_bus_tight.png';
   static const String icQr = 'assets/icons/ic_qr.png';
   static const String icRoutes = 'assets/icons/ic_routes.png';
   static const String icCardMir = 'assets/icons/ic_card_mir.png';

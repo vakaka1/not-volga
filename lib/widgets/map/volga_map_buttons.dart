@@ -141,10 +141,17 @@ class VolgaMapButtons extends StatelessWidget {
           onTap: onBusModeTap,
           child: Center(
             child: Image.asset(
-              AppAssets.icBus,
-              width: 24,
-              height: 24,
+              AppAssets.icRoutesBusTight,
+              width: 22,
+              height: 25,
               color: isBusModeActive ? const Color(0xFFE52929) : AppColors.black,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Image.asset(
+                AppAssets.icBus,
+                width: 42,
+                height: 42,
+                color: isBusModeActive ? const Color(0xFFE52929) : AppColors.black,
+              ),
             ),
           ),
         ),
