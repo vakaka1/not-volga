@@ -31,11 +31,13 @@ const List<String> _russianMonthsGenitive = [
 class VolgaActiveTicketSheet extends StatefulWidget {
   final ValueChanged<double>? onProgressChanged;
   final ActiveTicket? ticket;
+  final double? availableHeight;
 
   const VolgaActiveTicketSheet({
     super.key,
     this.onProgressChanged,
     this.ticket,
+    this.availableHeight,
   });
 
   @override
@@ -49,6 +51,7 @@ class _VolgaActiveTicketSheetState extends State<VolgaActiveTicketSheet>
 
   double _dragStartY = 0.0;
   double _dragStartValue = 0.0;
+  double _dragTotalDeltaY = 0.0;
 
   static const double _miniHeight = 54.0;
 
@@ -100,14 +103,16 @@ class _VolgaActiveTicketSheetState extends State<VolgaActiveTicketSheet>
     }
   }
 
-  void _onVerticalDragStart(DragStartDetails details, double totalTravel) {
+  void _onVerticalDragStart(DragStartDetails details) {
     _dragStartY = details.globalPosition.dy;
     _dragStartValue = _controller.value;
+    _dragTotalDeltaY = 0.0;
   }
 
   void _onVerticalDragUpdate(DragUpdateDetails details, double totalTravel) {
     if (totalTravel <= 0) return;
     final dy = details.globalPosition.dy - _dragStartY;
+    _dragTotalDeltaY = dy;
     // Dragging UP decreases dy -> increases progress
     final deltaProgress = -dy / totalTravel;
     _controller.value = (_dragStartValue + deltaProgress).clamp(0.0, 1.0);
@@ -115,15 +120,22 @@ class _VolgaActiveTicketSheetState extends State<VolgaActiveTicketSheet>
 
   void _onVerticalDragEnd(DragEndDetails details) {
     final velocity = details.primaryVelocity ?? 0.0;
-    if (velocity < -350) {
-      _expand();
-    } else if (velocity > 350) {
-      _collapse();
-    } else {
-      if (_controller.value > 0.45) {
+    if (_dragStartValue < 0.5) {
+      // Starting from collapsed (mini) state:
+      // If user tapped (micro-drag < 8px), or dragged up > 15%, or swiped up (velocity < -150) -> expand!
+      if (_dragTotalDeltaY.abs() < 8.0 || _controller.value > 0.15 || velocity < -150) {
         _expand();
       } else {
         _collapse();
+      }
+    } else {
+      // Starting from expanded state:
+      // Only collapse if pulled down significantly (> 50% down) or decisively swiped down (velocity > 400 && value < 0.85)
+      if (_controller.value < 0.5 || (velocity > 400 && _controller.value < 0.85)) {
+        _collapse();
+      } else {
+        // Otherwise snap back to expanded (do NOT collapse on light touches / scroll jitter)
+        _expand();
       }
     }
   }
@@ -133,12 +145,14 @@ class _VolgaActiveTicketSheetState extends State<VolgaActiveTicketSheet>
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final screenHeight = mediaQuery.size.height;
     final bottomNavTotalHeight = 56.0 + mediaQuery.padding.bottom;
-    final topPadding = mediaQuery.padding.top;
 
-    // Full coverage from bottom navigation bar all the way to status bar top
-    final double expandedHeight = screenHeight - bottomNavTotalHeight;
+    // Available height inside the parent Stack
+    final double totalAvailableHeight = widget.availableHeight ??
+        (mediaQuery.size.height - mediaQuery.padding.top - mediaQuery.padding.bottom);
+
+    // Full coverage from bottom navigation bar all the way to top of Stack (just below status bar)
+    final double expandedHeight = (totalAvailableHeight - bottomNavTotalHeight).clamp(_miniHeight, totalAvailableHeight);
     final double totalTravel = expandedHeight - _miniHeight;
 
     return AnimatedBuilder(
@@ -164,68 +178,78 @@ class _VolgaActiveTicketSheetState extends State<VolgaActiveTicketSheet>
           right: 0,
           bottom: currentBottom,
           height: currentHeight,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragStart: (d) => _onVerticalDragStart(d, totalTravel),
-            onVerticalDragUpdate: (d) => _onVerticalDragUpdate(d, totalTravel),
-            onVerticalDragEnd: _onVerticalDragEnd,
-            child: Material(
-              color: sheetBgColor,
-              elevation: progress < 0.5 ? 4.0 : 0.0,
-              shadowColor: const Color(0x22000000),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(topRadius)),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Full coverage safe-area spacer behind status bar + breathing room
-                  if (progress > 0.01)
-                    SizedBox(height: (topPadding + 10.0) * progress),
+          child: Material(
+            color: sheetBgColor,
+            elevation: progress < 0.5 ? 4.0 : 0.0,
+            shadowColor: const Color(0x22000000),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(topRadius)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Header area: top spacing + "Ваш билет" with isolated drag & tap handlers
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggle,
+                  onVerticalDragStart: _onVerticalDragStart,
+                  onVerticalDragUpdate: (d) => _onVerticalDragUpdate(d, totalTravel),
+                  onVerticalDragEnd: _onVerticalDragEnd,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (progress > 0.01)
+                        SizedBox(height: 12.0 * progress),
+                      SizedBox(
+                        height: progress > 0.5 ? 46.0 : _miniHeight,
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 26.0, right: 20.0, top: 4.0, bottom: 4.0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Ваш билет',
+                              style: TextStyle(
+                                fontFamily: 'NotoSans',
+                                fontSize: 21.0,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
-                  // Header: "Ваш билет"
-                  InkWell(
-                    onTap: _toggle,
-                    child: SizedBox(
-                      height: progress > 0.5 ? 46.0 : _miniHeight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 26.0, right: 20.0, top: 4.0, bottom: 4.0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Ваш билет',
-                            style: const TextStyle(
-                              fontFamily: 'NotoSans',
-                              fontSize: 21.0,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF111827),
-                              letterSpacing: -0.3,
+                // 2. Gap below header moving the card slightly lower
+                if (progress > 0.01)
+                  SizedBox(height: 14.0 * progress),
+
+                // 3. Ticket body with fixed card dimensions (320x575), scrollable and isolated from sheet drag
+                if (progress > 0.01)
+                  Expanded(
+                    child: Opacity(
+                      opacity: ((progress - 0.1) / 0.9).clamp(0.0, 1.0),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: _collapse, // tap outside card on grey background dismisses sheet
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 24.0),
+                          child: Center(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {}, // tap on the card does not dismiss
+                              child: _buildTicketCard(context),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-
-                  // Gap below header moving the card slightly lower
-                  if (progress > 0.01)
-                    SizedBox(height: 14.0 * progress),
-
-                  // Ticket body with fixed card dimensions (320x575)
-                  if (progress > 0.01)
-                    Expanded(
-                      child: Opacity(
-                        opacity: ((progress - 0.1) / 0.9).clamp(0.0, 1.0),
-                        child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.only(bottom: 24.0),
-                          child: Center(
-                            child: _buildTicketCard(context),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
           ),
         );

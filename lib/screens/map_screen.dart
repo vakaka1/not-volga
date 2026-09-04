@@ -14,6 +14,7 @@ import '../widgets/map/bus_marker_generator.dart';
 import '../widgets/map/volga_map_buttons.dart';
 import '../widgets/map/volga_route_badge.dart';
 import '../widgets/map/volga_bus_bottom_sheet.dart';
+import '../widgets/map/realtime_motion_smoother.dart';
 
 class MapScreen extends StatefulWidget {
   final ValueChanged<bool>? onSheetVisibilityChanged;
@@ -77,6 +78,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   StreamSubscription<Position>? _positionStreamSub;
 
   Timer? _pollingTimer;
+  Timer? _animationTimer;
+  bool _isFetchingVehicles = false;
+
+  // Состояния интерполяции для плавного движения в реальном времени
+  final Map<String, AnimatedVehicleState> _animatedVehicles = {};
+  AnimatedUserState? _animatedUser;
 
   // Видимые границы карты
   double _topLat = 56.93423;
@@ -106,6 +113,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _initBusMarkerGenerator();
     _initData();
     _startLiveVehiclesPolling();
+    _startAnimationLoop();
     _initRealGpsLocation();
   }
 
@@ -113,9 +121,40 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void dispose() {
     _positionStreamSub?.cancel();
     _pollingTimer?.cancel();
+    _animationTimer?.cancel();
     _sheetVisibilityController.dispose();
     _sheetExpandController.dispose();
     super.dispose();
+  }
+
+  /// Цикл обновления кадров интерполяции позиций автобусов и пользователя (20 FPS)
+  void _startAnimationLoop() {
+    _animationTimer?.cancel();
+    _animationTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      if (!_showBuses && _userLocation == null && _animatedUser == null) return;
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      bool needsRepaint = false;
+
+      if (_animatedUser != null) {
+        _animatedUser!.step(now);
+        _userLocation = _animatedUser!.currentPoint;
+        _userHeading = _animatedUser!.currentHeading;
+        needsRepaint = true;
+      }
+
+      if (_showBuses && _animatedVehicles.isNotEmpty) {
+        for (final animState in _animatedVehicles.values) {
+          animState.step(now);
+        }
+        needsRepaint = true;
+      }
+
+      if (needsRepaint) {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _initBusMarkerGenerator() async {
@@ -168,12 +207,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         try {
           final lastPos = await Geolocator.getLastKnownPosition();
           if (lastPos != null && mounted) {
-            setState(() {
-              _userLocation = Point(latitude: lastPos.latitude, longitude: lastPos.longitude);
-              if (lastPos.heading != 0) {
-                _userHeading = lastPos.heading;
-              }
-            });
+            _updateLiveUserPosition(lastPos);
           }
         } catch (_) {}
 
@@ -186,13 +220,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
           );
           if (mounted) {
+            _updateLiveUserPosition(pos);
             final userPt = Point(latitude: pos.latitude, longitude: pos.longitude);
-            setState(() {
-              _userLocation = userPt;
-              if (pos.heading != 0) {
-                _userHeading = pos.heading;
-              }
-            });
             _mapController?.moveCamera(
               CameraUpdate.newCameraPosition(
                 CameraPosition(target: userPt, zoom: 15.5),
@@ -202,20 +231,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           }
         } catch (_) {}
 
-        // 3. Непрерывный поток координат и компаса/направления
+        // 3. Непрерывный поток координат и компаса/направления в реальном времени
+        final locationSettings = AndroidSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+          intervalDuration: const Duration(milliseconds: 500),
+        );
         _positionStreamSub = Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.best,
-            distanceFilter: 2,
-          ),
+          locationSettings: locationSettings,
         ).listen((livePos) {
           if (mounted) {
-            setState(() {
-              _userLocation = Point(latitude: livePos.latitude, longitude: livePos.longitude);
-              if (livePos.heading != 0) {
-                _userHeading = livePos.heading;
-              }
-            });
+            _updateLiveUserPosition(livePos);
           }
         });
       }
@@ -224,13 +250,40 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  /// Обновление целевой позиции пользователя для плавной интерполяции
+  void _updateLiveUserPosition(Position livePos) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final newPt = Point(latitude: livePos.latitude, longitude: livePos.longitude);
+    final newHeading = livePos.heading != 0 ? livePos.heading : (_userHeading ?? 0.0);
+
+    if (_animatedUser == null) {
+      _animatedUser = AnimatedUserState(
+        currentPoint: newPt,
+        startPoint: newPt,
+        targetPoint: newPt,
+        currentHeading: newHeading,
+        startHeading: newHeading,
+        targetHeading: newHeading,
+        startTimeMs: now,
+        durationMs: 500,
+      );
+      setState(() {
+        _userLocation = newPt;
+        _userHeading = newHeading;
+      });
+    } else {
+      _animatedUser!.updateTarget(newPt, newHeading, now, 500);
+    }
+  }
+
   /// Кнопка центрирования на пользователе (стрелка)
   Future<void> _centerOnUserLocation() async {
     // 1. Если координаты уже известны, мгновенно анимируем камеру туда
-    if (_userLocation != null) {
+    final targetPt = _animatedUser?.currentPoint ?? _userLocation;
+    if (targetPt != null) {
       _mapController?.moveCamera(
         CameraUpdate.newCameraPosition(
-          CameraPosition(target: _userLocation!, zoom: 16.5),
+          CameraPosition(target: targetPt, zoom: 16.5),
         ),
         animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.6),
       );
@@ -266,12 +319,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         );
         final userPt = Point(latitude: pos.latitude, longitude: pos.longitude);
         if (mounted) {
-          setState(() {
-            _userLocation = userPt;
-            if (pos.heading != 0) {
-              _userHeading = pos.heading;
-            }
-          });
+          _updateLiveUserPosition(pos);
 
           _mapController?.moveCamera(
             CameraUpdate.newCameraPosition(
@@ -372,31 +420,67 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _startLiveVehiclesPolling() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchLiveVehicles());
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 500), (_) => _fetchLiveVehicles());
   }
 
   Future<void> _fetchLiveVehicles() async {
-    if (_mapController != null) {
-      try {
-        final region = await _mapController!.getFocusRegion();
-        _topLat = region.topRight.latitude;
-        _bottomLat = region.bottomLeft.latitude;
-        _leftLng = region.bottomLeft.longitude;
-        _rightLng = region.topRight.longitude;
-      } catch (_) {}
+    if (_isFetchingVehicles) return;
+    _isFetchingVehicles = true;
+    try {
+      if (_mapController != null) {
+        try {
+          final region = await _mapController!.getFocusRegion();
+          _topLat = region.topRight.latitude;
+          _bottomLat = region.bottomLeft.latitude;
+          _leftLng = region.bottomLeft.longitude;
+          _rightLng = region.topRight.longitude;
+        } catch (_) {}
+      }
+
+      final liveVehicles = await _transportService.getVehicles(
+        topLat: _topLat,
+        bottomLat: _bottomLat,
+        leftLng: _leftLng,
+        rightLng: _rightLng,
+      );
+
+      if (mounted && liveVehicles.isNotEmpty) {
+        _updateAnimatedVehicles(liveVehicles);
+        _preloadBusMarkers();
+      }
+    } catch (_) {
+    } finally {
+      _isFetchingVehicles = false;
+    }
+  }
+
+  void _updateAnimatedVehicles(List<VehicleModel> liveVehicles) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _allVehicles = liveVehicles;
+
+    final currentIds = <String>{};
+    for (final v in liveVehicles) {
+      currentIds.add(v.vehicleId);
+      final existing = _animatedVehicles[v.vehicleId];
+      if (existing != null) {
+        existing.updateTarget(v, now, 500);
+      } else {
+        _animatedVehicles[v.vehicleId] = AnimatedVehicleState(
+          currentPoint: Point(latitude: v.lat, longitude: v.lng),
+          startPoint: Point(latitude: v.lat, longitude: v.lng),
+          targetPoint: Point(latitude: v.lat, longitude: v.lng),
+          currentCourse: v.course,
+          startCourse: v.course,
+          targetCourse: v.course,
+          speedKmh: v.speed.toDouble(),
+          startTimeMs: now,
+          durationMs: 500,
+        );
+      }
     }
 
-    final liveVehicles = await _transportService.getVehicles(
-      topLat: _topLat,
-      bottomLat: _bottomLat,
-      leftLng: _leftLng,
-      rightLng: _rightLng,
-    );
-
-    if (mounted && liveVehicles.isNotEmpty) {
-      setState(() => _allVehicles = liveVehicles);
-      _preloadBusMarkers();
-    }
+    _animatedVehicles.removeWhere((id, _) => !currentIds.contains(id));
   }
 
   void _onCameraPositionChanged(CameraPosition position, CameraUpdateReason reason, bool finished) {
@@ -905,10 +989,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
       for (final vehicle in displayVehicles) {
         final isSelected = _selectedVehicle?.vehicleId == vehicle.vehicleId;
-        final key = '${vehicle.vehicleId}_${vehicle.course.toInt()}_$isSelected';
+        final anim = _animatedVehicles[vehicle.vehicleId];
+        final currentPt = anim?.currentPoint ?? Point(latitude: vehicle.lat, longitude: vehicle.lng);
+        final currentCourse = anim?.currentCourse ?? vehicle.course;
+        final key = '${vehicle.vehicleId}_${currentCourse.toInt()}_$isSelected';
         final cachedIcon = _busMarkerCache[key] ??
             BusMarkerGenerator.getCachedMarker(
-              course: vehicle.course,
+              course: currentCourse,
               routeName: vehicle.routeName,
               isSelected: isSelected,
             );
@@ -919,7 +1006,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         objects.add(
           PlacemarkMapObject(
             mapId: MapObjectId('bus_${vehicle.vehicleId}'),
-            point: Point(latitude: vehicle.lat, longitude: vehicle.lng),
+            point: currentPt,
             icon: PlacemarkIcon.single(
               PlacemarkIconStyle(
                 image: iconDescriptor,
@@ -938,12 +1025,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
 
     // 4. Реальный маркер геопозиции пользователя с направлением (куда смотрит!)
-    if (_userLocation != null) {
+    final userPt = _animatedUser?.currentPoint ?? _userLocation;
+    final userH = _animatedUser?.currentHeading ?? _userHeading ?? 0.0;
+    if (userPt != null) {
       objects.add(
         PlacemarkMapObject(
           mapId: const MapObjectId('user_location_marker'),
-          point: _userLocation!,
-          direction: _userHeading ?? 0.0,
+          point: userPt,
+          direction: userH,
           icon: PlacemarkIcon.single(
             PlacemarkIconStyle(
               image: _locationIcon,
