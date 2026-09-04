@@ -210,10 +210,10 @@ class _VolgaActiveTicketSheetState extends State<VolgaActiveTicketSheet>
                               'Ваш билет',
                               style: TextStyle(
                                 fontFamily: 'NotoSans',
-                                fontSize: 21.0,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.w600,
                                 color: Color(0xFF111827),
-                                letterSpacing: -0.3,
+                                letterSpacing: -0.2,
                               ),
                             ),
                           ),

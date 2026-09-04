@@ -29,14 +29,6 @@ class VolgaBottomNavBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor ?? AppColors.rootbmBackground,
-        border: showTopBorder
-            ? const Border(
-                top: BorderSide(
-                  color: AppColors.rootbmDivider,
-                  width: 0.5,
-                ),
-              )
-            : null,
       ),
       child: SafeArea(
         top: false,

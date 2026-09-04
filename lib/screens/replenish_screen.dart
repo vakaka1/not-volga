@@ -278,13 +278,16 @@ class _ReplenishScreenState extends State<ReplenishScreen> {
                 ),
               ),
             ),
-
-            // Loading overlay matching QR scanner connecting animation
-            if (_isProcessing) _buildConnectingOverlay(),
           ],
         ),
       ),
-    );
+
+      // Loading overlay matching QR scanner connecting animation
+      if (_isProcessing) _buildConnectingOverlay(),
+    ],
+  ),
+),
+);
   }
 
   Widget _buildConnectingOverlay() {
