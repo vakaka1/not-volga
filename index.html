@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>НЕ-Волга</title>
+  <meta name="description" content="НЕ-Волга v1.0.0 — независимый легковесный клиент и генератор билетов для транспорта Твери и Тверской области. Работает автономно, без сбоев связи и без сбора персональных данных.">
+  <meta name="theme-color" content="#060913">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="НЕ-Волга — Релиз 1.0.0">
+  <meta property="og:description" content="Автономный клиент и генератор билетов для автобусов Твери. Понятно даже юристу, надежно даже без интернета.">
+  <meta property="og:image" content="https://github.com/user-attachments/assets/5a8c2922-047e-4f29-9142-3e2512783a02">
+  <meta property="og:type" content="website">
+
+  <style>
+    /* ==========================================================================
+       Базовые переменные и тема (Тёмно-синий и чёрный дизайн)
+       ========================================================================== */
+    :root {
+      --bg-main: #060913;
+      --bg-surface: #0c1222;
+      --bg-surface-elevated: #131b31;
+      --bg-card: rgba(18, 26, 48, 0.75);
+      --bg-card-hover: rgba(26, 37, 68, 0.9);
+
+      --accent-blue: #0052ff;
+      --accent-blue-light: #2d70ff;
+      --accent-cyan: #38bdf8;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-subtle: #64748b;
+
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(45, 112, 255, 0.35);
+
+      --glow-blue: 0 0 35px rgba(0, 82, 255, 0.25);
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+      --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', Ubuntu, Cantarell, sans-serif;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+    }
+
+    /* ==========================================================================
+       Сброс и типографика
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(0, 82, 255, 0.18) 0%, transparent 55%),
+        radial-gradient(circle at 100% 40%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 0% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 40%),
+        var(--bg-main);
+      background-attachment: fixed;
+      min-height: 100vh;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* ==========================================================================
+       Контейнер и сетка
+       ========================================================================== */
+    .container {
+      width: 100%;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* ==========================================================================
+       Шапка сайта (Navbar)
+       ========================================================================== */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(6, 9, 19, 0.85);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .nav-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 70px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-logo-img {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      object-fit: cover;
+      box-shadow: 0 0 15px rgba(0, 82, 255, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: rgba(0, 82, 255, 0.2);
+      color: var(--accent-cyan);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-main);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* ==========================================================================
+       Кнопки
+       ========================================================================== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 24px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      border: none;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue) 0%, #1e40af 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 20px rgba(0, 82, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0, 82, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      background: linear-gradient(135deg, var(--accent-blue-light) 0%, #2563eb 100%);
+    }
+
+    .btn-secondary {
+      background: var(--bg-surface-elevated);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-highlight);
+      transform: translateY(-2px);
+    }
+
+    .btn-lg {
+      padding: 16px 32px;
+      font-size: 1.1rem;
+      border-radius: var(--radius-lg);
+    }
+
+    .btn-icon-only {
+      padding: 10px;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface-elevated);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-icon-only:hover {
+      color: var(--text-main);
+      border-color: var(--border-highlight);
+    }
+
+    /* ==========================================================================
+       Hero секция
+       ========================================================================== */
+    .hero {
+      min-height: calc(100vh - 70px);
+      min-height: calc(100dvh - 70px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      text-align: center;
+      position: relative;
+      box-sizing: border-box;
+    }
+
+    .hero .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .hero-logo-wrapper {
+      position: relative;
+      display: block;
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto 28px;
+    }
+
+    .hero-logo-img {
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
+      position: relative;
+      z-index: 2;
+      display: block;
+      margin: 0 auto;
+      filter: drop-shadow(0 12px 35px rgba(0, 82, 255, 0.45));
+      animation: float 6s ease-in-out infinite;
+    }
+
+    .hero-logo-glow {
+      position: absolute;
+      inset: -15px -25px;
+      background: radial-gradient(ellipse at center, rgba(0, 82, 255, 0.4) 0%, transparent 70%);
+      filter: blur(35px);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(0, 82, 255, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: var(--radius-full);
+      color: var(--accent-cyan);
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .hero-title {
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.5px;
+      margin-bottom: 18px;
+      background: linear-gradient(180deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+      color: var(--text-muted);
+      max-width: 780px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .hero-features-ribbon {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-color);
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .ribbon-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    .ribbon-item svg {
+      color: var(--accent-cyan);
+      flex-shrink: 0;
+    }
+
+    /* ==========================================================================
+       Секции и заголовки
+       ========================================================================== */
+    .section {
+      padding: 70px 0;
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto 50px;
+    }
+
+    .section-tag {
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--accent-cyan);
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+
+    .section-title {
+      font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .section-desc {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+       Карточки и сетки
+       ========================================================================== */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 30px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-highlight);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-card), var(--glow-blue);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    /* ==========================================================================
+       Секция: Простыми словами (Для неспециалистов)
+       ========================================================================== */
+    .plain-box {
+      background: linear-gradient(145deg, rgba(12, 18, 34, 0.95), rgba(18, 27, 50, 0.95));
+      border: 1px solid rgba(0, 82, 255, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      margin-bottom: 40px;
+      position: relative;
+    }
+
+    .plain-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--accent-blue-light);
+      border-top-left-radius: var(--radius-lg);
+      border-bottom-left-radius: var(--radius-lg);
+    }
+
+    .plain-lead {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .plain-text {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .plain-highlight {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* ==========================================================================
+       Шаги работы (1-2-3)
+       ========================================================================== */
+    .steps-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      position: relative;
+    }
+
+    .step-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px 24px;
+      position: relative;
+      text-align: left;
+    }
+
+    .step-number {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(0, 82, 255, 0.15);
+      border: 1px solid rgba(0, 82, 255, 0.3);
+      color: var(--accent-cyan);
+      font-weight: 800;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .step-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--text-main);
+    }
+
+    .step-desc {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ==========================================================================
+       Интерактивная демонстрация билета
+       ========================================================================== */
+    .demo-wrapper {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+
+    @media (max-width: 880px) {
+      .demo-wrapper {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .ticket-phone-frame {
+      background: #000000;
+      border: 8px solid #1e293b;
+      border-radius: 36px;
+      padding: 16px;
+      max-width: 380px;
+      margin: 0 auto;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 82, 255, 0.2);
+      position: relative;
+    }
+
+    .ticket-screen {
+      background: #f4f6f9;
+      border-radius: 24px;
+      color: #111827;
+      overflow: hidden;
+      position: relative;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .ticket-header-app {
+      background: #ffffff;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .ticket-app-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ticket-live-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .ticket-body {
+      padding: 20px 18px;
+      background: #ffffff;
+      border-radius: 16px;
+      margin: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+      position: relative;
+    }
+
+    .ticket-route-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #0052ff;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 1.15rem;
+      padding: 4px 16px 4px 12px;
+      border-radius: 6px;
+      clip-path: polygon(0% 0%, 85% 0%, 100% 50%, 85% 100%, 0% 100%);
+      margin-bottom: 12px;
+    }
+
+    .ticket-time {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .ticket-station {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 16px;
+    }
+
+    .ticket-price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-top: 1px dashed #cbd5e1;
+      border-bottom: 1px dashed #cbd5e1;
+      margin-bottom: 16px;
+    }
+
+    .ticket-price-val {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #0052ff;
+    }
+
+    .ticket-plate-badge {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 4px 8px;
+      color: #1e293b;
+    }
+
+    .ticket-qr-simulation {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: #fafafa;
+      border-radius: 12px;
+      border: 1px solid #eee;
+    }
+
+    .qr-svg {
+      width: 130px;
+      height: 130px;
+    }
+
+    .ticket-timer-display {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #059669;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ==========================================================================
+       Сравнение (Оригинал vs НЕ-Волга)
+       ========================================================================== */
+    .compare-table-wrapper {
+      overflow-x: auto;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+    }
+
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .compare-table th, .compare-table td {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .compare-table th {
+      background: rgba(18, 27, 50, 0.6);
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text-main);
+    }
+
+    .compare-table td {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+    }
+
+    .col-highlight {
+      background: rgba(0, 82, 255, 0.05);
+      font-weight: 600;
+      color: #ffffff !important;
+    }
+
+    .badge-check {
+      color: var(--accent-green);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .badge-cross {
+      color: #ef4444;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ==========================================================================
+       Секция: Юристам и экспертам (Правовая прозрачность)
+       ========================================================================== */
+    .legal-card {
+      background: linear-gradient(160deg, #0d1527 0%, #080c16 100%);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+    }
+
+    .legal-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      margin-bottom: 18px;
+    }
+
+    .legal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 10px;
+    }
+
+    .legal-desc {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ==========================================================================
+       FAQ Аккордеон
+       ========================================================================== */
+    .faq-list {
+      max-width: 820px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .faq-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: border-color 0.2s ease;
+    }
+
+    .faq-item.active {
+      border-color: var(--border-highlight);
+      background: var(--bg-surface-elevated);
+    }
+
+    .faq-question {
+      width: 100%;
+      padding: 20px 24px;
+      text-align: left;
+      background: none;
+      border: none;
+      color: var(--text-main);
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .faq-chevron {
+      color: var(--text-muted);
+      transition: transform 0.3s ease;
+      flex-shrink: 0;
+    }
+
+    .faq-item.active .faq-chevron {
+      transform: rotate(180deg);
+      color: var(--accent-cyan);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.35s ease;
+      padding: 0 24px;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.65;
+    }
+
+    .faq-item.active .faq-answer {
+      max-height: 500px;
+      padding-bottom: 22px;
+    }
+
+    /* ==========================================================================
+       Скачивание (Call To Action)
+       ========================================================================== */
+    .cta-box {
+      background: radial-gradient(circle at 50% 0%, rgba(0, 82, 255, 0.3) 0%, transparent 70%), var(--bg-surface-elevated);
+      border: 1px solid rgba(0, 82, 255, 0.4);
+      border-radius: 28px;
+      padding: 60px 30px;
+      text-align: center;
+      box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.8), var(--glow-blue);
+      position: relative;
+    }
+
+    .cta-title {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 800;
+      margin-bottom: 14px;
+      color: #ffffff;
+    }
+
+    .cta-desc {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 30px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .cta-meta {
+      font-size: 0.85rem;
+      color: var(--text-subtle);
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    /* ==========================================================================
+       Подвал (Footer)
+       ========================================================================== */
+    .footer {
+      padding: 50px 0 30px;
+      border-top: 1px solid var(--border-color);
+      color: var(--text-subtle);
+      font-size: 0.9rem;
+    }
+
+    .footer-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 30px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-main);
+    }
+
+    .disclaimer {
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #475569;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 20px;
+      text-align: center;
+    }
+
+    /* ==========================================================================
+       Мобильная адаптивность
+       ========================================================================== */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none; /* Упрощенная мобильная шапка */
+      }
+      .hero {
+        min-height: calc(100vh - 70px);
+        min-height: calc(100dvh - 70px);
+        padding: 30px 0;
+      }
+      .hero-logo-wrapper {
+        max-width: 92%;
+        margin-bottom: 20px;
+      }
+      .plain-box {
+        padding: 24px;
+      }
+      .section {
+        padding: 50px 0;
+      }
+      .cta-box {
+        padding: 40px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       ШАПКА (NAVBAR)
+       ========================================================================== -->
+  <header class="header">
+    <div class="container nav-container">
+      <a href="#" class="brand">
+        <span>НЕ-Волга</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#about">О проекте</a></li>
+        <li><a href="#how-it-works">Как работает</a></li>
+        <li><a href="#features">Что есть</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://github.com/vakaka1/not-volga" target="_blank" rel="noopener" class="btn btn-icon-only" title="Исходный код на GitHub" aria-label="GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+          </svg>
+        </a>
+        <a href="https://github.com/vakaka1/not-volga/releases/download/1.0.0/app-release.apk" class="btn btn-primary" download>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Скачать APK</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       HERO СЕКЦИЯ
+       ========================================================================== -->
+  <main>
+    <section class="hero">
+      <div class="container">
+
+
+        <h1 class="hero-title">Приложение «НЕ-Волга»</h1>
+
+        <p class="hero-subtitle">
+          Надежный, независимый клиент и автономный генератор билетов для транспорта Верхневолжья. Создан для пассажиров, которым важно ехать спокойно — даже при полном отсутствии мобильной связи.
+        </p>
+
+        <div class="hero-actions">
+          <a href="https://github.com/vakaka1/not-volga/releases/download/1.0.0/app-release.apk" class="btn btn-primary btn-lg" download id="downloadBtn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Скачать APK</span>
+          </a>
+
+          <a href="https://github.com/vakaka1/not-volga/releases/tag/1.0.0" target="_blank" rel="noopener" class="btn btn-secondary btn-lg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span>Релиз на GitHub</span>
+          </a>
+        </div>
+
+        <div class="hero-features-ribbon">
+          <div class="ribbon-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+            <span>Мгновенный старт</span>
+          </div>
+          <div class="ribbon-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>Без сбора данных</span>
+          </div>
+          <div class="ribbon-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"></path>
+            </svg>
+            <span>Работает без интернета (Оффлайн)</span>
+          </div>
+          <div class="ribbon-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <line x1="7" y1="8" x2="17" y2="8"></line>
+              <line x1="7" y1="12" x2="17" y2="12"></line>
+              <line x1="7" y1="16" x2="11" y2="16"></line>
+            </svg>
+            <span>Открытый код (MIT)</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: ПРОСТЫМИ СЛОВАМИ (О ПРОЕКТЕ)
+         ========================================================================== -->
+    <section class="section" id="about">
+      <div class="container">
+
+        <div class="section-header">
+          <h2 class="section-title">Что такое «НЕ-Волга» и зачем она нужна?</h2>
+          <p class="section-desc">Объясняем простым человеческим языком без сложных терминов программирования</p>
+        </div>
+
+        <div class="plain-box">
+          <div class="plain-lead">
+            Знакома ситуация? Вы заходите в переполненный автобус в Твери, телефон ловит плохо, мобильное приложение зависает на белом экране, требует обновиться или привязать карту, а оплатить проезд нужно прямо сейчас.
+          </div>
+          <p class="plain-text">
+            <strong>«НЕ-Волга»</strong> — это независимое запасное приложение для пассажиров Твери и Тверской области. Внешне оно выглядит в точности как оригинальное приложение «Волга», но устроено так, чтобы <span class="plain-highlight">никогда не подвести пассажира</span>.
+          </p>
+          <p class="plain-text">
+            Оно не требует вводить номер телефона, не просит паролей из СМС, не привязывает вашу банковскую карту и не шлёт ваши данные на чужие серверы. Оно просто выполняет одну задачу: быстро и надежно обеспечивает вас билетом и показывает движение транспорта.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="card">
+            <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">Не зависает на морозе</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              Оригинальные приложения перегружены тяжелыми модулями и системами трекинга. «НЕ-Волга» оптимизирована до байта: открывается мгновенно, работает плавно даже на старых смартфонах.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">Спасает при сбоях связи</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              В районах без 4G или при работе глушилок связь пропадает. В «НЕ-Волгу» уже заранее встроены все маршруты, остановки и тарифы Твери. Вы можете выпустить билет даже в «Авиарежиме».
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">Полная анонимность</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              Никто не узнает, где вы сели и куда поехали. Никакой авторизации, телефон или банковский счет. Ваши поездки остаются только в памяти вашего телефона.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: КАК ЭТО РАБОТАЕТ В 3 ШАГА
+         ========================================================================== -->
+    <section class="section" id="how-it-works">
+      <div class="container">
+
+        <div class="section-header">
+          <h2 class="section-title">Как работает приложение в реальной жизни</h2>
+          <p class="section-desc">Три простых действия, чтобы спокойно и уверенно ехать в автобусе</p>
+        </div>
+
+        <div class="steps-container">
+
+          <div class="step-card">
+            <div class="step-number">1</div>
+            <h3 class="step-title">Вы зашли в салон автобуса</h3>
+            <p class="step-desc">
+              Откройте «НЕ-Волгу». Приложение подключится к общедоступному цифровому шлюзу Тверского транспорта и покажет живые автобусы рядом с вами. Если интернет отключен — сразу откроется оффлайн-карта.
+            </p>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">2</div>
+            <h3 class="step-title">Наведите камеру на QR-код</h3>
+            <p class="step-desc">
+              Нажмите кнопку сканера и наведите экран на QR наклейку в салоне. Приложение моментально считает номер машины, определит остановку и выставит правильную стоимость (40 ₽ по городу или 20 ₽ по пересадке).
+            </p>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">3</div>
+            <h3 class="step-title">Получите готовый билет</h3>
+            <p class="step-desc">
+              На экране появится полноценный электронный билет с живым таймером на 2 часа, госномером автобуса и официальным контрольным штрих-кодом проверки. При входе контролёра просто покажите экран.
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: ЧТО НОВОГО В РЕЛИЗЕ 1.0.0
+         ========================================================================== -->
+    <section class="section" id="features">
+      <div class="container">
+
+        <div class="section-header">
+          <h2 class="section-title">Что есть в НЕ-Волга</h2>
+          <p class="section-desc">Большое обновление, сделавшее поездку ещё более комфортной</p>
+        </div>
+
+        <div class="grid-3">
+
+          <div class="card">
+            <div style="color: var(--accent-cyan); margin-bottom: 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                <path d="M7 17h10"></path>
+                <path d="M12 7v6"></path>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Плавный транспорт</h3>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+              Автобусы на карте не прыгают скачками. Специальный алгоритм сглаживания двигает их плавно.
+            </p>
+          </div>
+
+          <div class="card">
+            <div style="color: var(--accent-cyan); margin-bottom: 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Направление движения</h3>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+              Иконка автобуса поворачивается носом строго по направлению улицы. Вы сразу видите, едет ли автобус к вам или уже уезжает в обратную сторону.
+            </p>
+          </div>
+
+          <div class="card">
+            <div style="color: var(--accent-cyan); margin-bottom: 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Пригородные зоны</h3>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+              Автоматический расчёт стоимости для поездок за город: приложение считает километры между остановками и рассчитывает честную цену по тарифу.
+            </p>
+          </div>
+
+          <div class="card">
+            <div style="color: var(--accent-cyan); margin-bottom: 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 14 14"></polyline>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Скидка на пересадку 50%</h3>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+              Если вы совершаете вторую поездку в течение 60 минут, приложение автоматически активирует пересадочный тариф за 20 ₽ вместо 40 ₽.
+            </p>
+          </div>
+
+          <div class="card">
+            <div style="color: var(--accent-cyan); margin-bottom: 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Аварийный конструктор</h3>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+              Если QR-код в салоне не работает, выпустите билет вручную в конструкторе.
+            </p>
+          </div>
+
+          <div class="card">
+            <div style="color: var(--accent-cyan); margin-bottom: 16px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Лента новостей региона</h3>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+              Прямая трансляция новостей и объявлений об изменениях схем движения с официального сайта Верхневолжья прямо во встроенной вкладке «События».
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: СРАВНЕНИЕ (ОРИГИНАЛ VS НЕ-ВОЛГА)
+         ========================================================================== -->
+    <section class="section">
+      <div class="container">
+
+        <div class="section-header">
+          <span class="section-tag">Наглядная разница</span>
+          <h2 class="section-title">Официальная «Волга» или «НЕ-Волга»?</h2>
+          <p class="section-desc">Сравнение ключевых характеристик двух приложений</p>
+        </div>
+
+        <div class="compare-table-wrapper">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>Параметр</th>
+                <th>Официальное приложение</th>
+                <th class="col-highlight">НЕ-Волга</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Работа при блокировках и сбоях интернета</strong></td>
+                <td><span class="badge-cross">✖ Ошибка «Нет соединения»</span></td>
+                <td class="col-highlight"><span class="badge-check">✔ Работает из встроенной базы</span></td>
+              </tr>
+              <tr>
+                <td><strong>Регистрация и подтверждение по СМС</strong></td>
+                <td>Обязательно по номеру телефона</td>
+                <td class="col-highlight"><span class="badge-check">✔ Не требуется вовсе</span></td>
+              </tr>
+              <tr>
+                <td><strong>Сбор персональных данных</strong></td>
+                <td>История поездок на внешних серверах</td>
+                <td class="col-highlight"><span class="badge-check">✔ Ноль данных (только в телефоне)</span></td>
+              </tr>
+              <tr>
+                <td><strong>Привязка банковской карты</strong></td>
+                <td>Требует данные реальной карты</td>
+                <td class="col-highlight"><span class="badge-check">✔ Не требует реквизитов</span></td>
+              </tr>
+              <tr>
+                <td><strong>Прозрачность и безопасность</strong></td>
+                <td>Закрытый коммерческий код</td>
+                <td class="col-highlight"><span class="badge-check">✔ 100% открытый исходный код MIT</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: FAQ (ЧАСТЫЕ ВОПРОСЫ)
+         ========================================================================== -->
+    <section class="section" id="faq">
+      <div class="container">
+
+        <div class="section-header">
+          <span class="section-tag">Ответы на вопросы</span>
+          <h2 class="section-title">Часто задаваемые вопросы</h2>
+          <p class="section-desc">Всё, что вы хотели узнать о работе программы</p>
+        </div>
+
+        <div class="faq-list">
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Спишутся ли реальные деньги с моей банковской карты?</span>
+              <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="faq-answer">
+              Нет. «НЕ-Волга» вообще не просит и не имеет доступа к вашей банковской карте. Внутри приложения работает полностью автономный виртуальный кошелек, пополнять который можно бесплатно в один клик прямо на экране.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Что происходит, если в автобусе вообще нет мобильного интернета?</span>
+              <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="faq-answer">
+              Приложение продолжает полноценно работать! В релиз 1.0.0 уже встроена полная база данных всех остановок, тарифов и маршрутов Твери и городов области. Если камера не может связаться с сервером, вы можете вручную выбрать маршрут в конструкторе и выпустить действующий билет.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Что будет при проверке билета контролёром?</span>
+              <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="faq-answer">
+              Билет на экране содержит точный госномер автобуса, время вашей посадки, название остановки, правильный тариф и динамический контрольный QR-код. Контролёр видит полностью стандартный билет системы «Транспорт Верхневолжья».
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Работает ли приложение за пределами Твери (в области)?</span>
+              <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="faq-answer">
+              Да! Приложение поддерживает тарифные сетки и маршруты Твери, Ржева, Кимр, Конаково, Осташкова, Пено, Старицы и Зубцова, а также пригородные маршруты с расчетом километража.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Безопасно ли устанавливать APK-файл на телефон?</span>
+              <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="faq-answer">
+              Абсолютно безопасно. В приложении нет вредоносного кода, скрытых платежей, подписок или вирусов. Проект полностью открыт (Open Source), и любой желающий может самостоятельно собрать APK из исходного кода на GitHub.
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: ИНСТРУКЦИЯ ПО УСТАНОВКЕ
+         ========================================================================== -->
+    <section class="section">
+      <div class="container">
+
+        <div class="section-header">
+          <h2 class="section-title">Как установить «НЕ-Волгу» на телефон</h2>
+          <p class="section-desc">Три простых шага для любого Android смартфона</p>
+        </div>
+
+        <div class="steps-container">
+
+          <div class="step-card">
+            <div class="step-number">1</div>
+            <h3 class="step-title">Скачайте APK-файл</h3>
+            <p class="step-desc">
+              Нажмите кнопку «Скачать APK» на этой странице. Загрузка релизного пакета начнётся напрямую с официального репозитория GitHub.
+            </p>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">2</div>
+            <h3 class="step-title">Подтвердите установку</h3>
+            <p class="step-desc">
+              Откройте скачанный файл. Если телефон спросит разрешение на установку приложений не из Google Play — нажмите «Разрешить для этого источника». Это стандартная мера безопасности Android.
+            </p>
+          </div>
+
+          <div class="step-card">
+            <div class="step-number">3</div>
+            <h3 class="step-title">Готово к поездкам!</h3>
+            <p class="step-desc">
+              Иконка появится на рабочем столе телефона. Запустите приложение — и перед вами сразу откроется привычная интерактивная карта Твери.
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         СЕКЦИЯ: ПРИЗЫВ К ДЕЙСТВИЮ (СКАЧИВАНИЕ)
+         ========================================================================== -->
+    <section class="section" style="padding-bottom: 90px;">
+      <div class="container">
+
+        <div class="cta-box">
+          <h2 class="cta-title">Попробуйте «НЕ-Волгу» прямо сейчас</h2>
+          <p class="cta-desc">
+            Бесплатный, быстрый и независимый транспортный клиент для вашего смартфона. Забудьте о зависаниях и сбоях при оплате проезда.
+          </p>
+
+          <div class="cta-buttons">
+            <a href="https://github.com/vakaka1/not-volga/releases/download/1.0.0/app-release.apk" class="btn btn-primary btn-lg" download>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Скачать последний APK</span>
+            </a>
+
+            <a href="https://github.com/vakaka1/not-volga" target="_blank" rel="noopener" class="btn btn-secondary btn-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+              </svg>
+              <span>Репозиторий на GitHub</span>
+            </a>
+          </div>
+
+          <div class="cta-meta">
+            <span>Платформа: Android</span>
+            <span>•</span>
+            <span>Формат: APK</span>
+            <span>•</span>
+            <span>Лицензия: MIT (Open Source)</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- ==========================================================================
+       ПОДВАЛ (FOOTER)
+       ========================================================================== -->
+  <footer class="footer">
+    <div class="container">
+
+      <div class="footer-content">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-weight: 700; color: var(--text-main);">НЕ-Волга</span>
+          <span>© 2026</span>
+        </div>
+
+        <ul class="footer-links">
+          <li><a href="https://github.com/vakaka1/not-volga/" target="_blank" rel="noopener">Проект</a></li>
+          <li><a href="https://github.com/vakaka1/not-volga/blob/main/API.md" target="_blank" rel="noopener">Спецификация API</a></li>
+          <li><a href="https://github.com/vakaka1/not-volga/blob/main/LICENSE" target="_blank" rel="noopener">Лицензия MIT</a></li>
+        </ul>
+      </div>
+
+      <div class="disclaimer">
+        Дисклеймер: Проект «НЕ-Волга» является независимой исследовательской разработкой с открытым исходным кодом. Товарные знаки и наименования «Волга», «Транспорт Верхневолжья» и соответствующие логотипы принадлежат их законным правообладателям и упоминаются здесь исключительно в описательных целях информирования пользователей. Программа не собирает персональные данные пассажиров.
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- ==========================================================================
+       ИНТЕРАКТИВНЫЙ JAVASCRIPT
+       ========================================================================== -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // 1. Интерактивный FAQ (Аккордеон)
+      const faqItems = document.querySelectorAll('.faq-item');
+      faqItems.forEach(item => {
+        const questionBtn = item.querySelector('.faq-question');
+        questionBtn.addEventListener('click', () => {
+          const isActive = item.classList.contains('active');
+          // Закрываем все остальные
+          faqItems.forEach(el => el.classList.remove('active'));
+          // Тогглим текущий
+          if (!isActive) {
+            item.classList.add('active');
+          }
+        });
+      });
+
+      // По умолчанию открываем первый вопрос FAQ
+      if (faqItems.length > 0) {
+        faqItems[0].classList.add('active');
+      }
+
+      // 2. Симуляция живого таймера и даты билета
+      const now = new Date();
+      const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+      const dateString = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const demoDateEl = document.getElementById('demoDateTime');
+      if (demoDateEl) {
+        demoDateEl.textContent = dateString;
+      }
+
+      // Обратный отсчет (1 час 58 минут 40 секунд)
+      let totalSeconds = 7120;
+      const countdownEl = document.getElementById('demoCountdown');
+
+      function updateCountdown() {
+        if (totalSeconds > 0) {
+          totalSeconds--;
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          if (countdownEl) {
+            countdownEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+          }
+        }
+      }
+      setInterval(updateCountdown, 1000);
+
+      // 3. Кнопка «Сгенерировать случайный автобус»
+      const randomBuses = [
+        { route: '№ 9', plate: 'Н 390 СР 69', station: 'Железнодорожный вокзал', fare: '40 ₽' },
+        { route: '№ 24', plate: 'М 102 ТВ 69', station: 'Площадь Мира', fare: '40 ₽' },
+        { route: '№ 36', plate: 'Е 771 КХ 69', station: 'Микрорайон «Южный»', fare: '40 ₽' },
+        { route: '№ 208', plate: 'О 450 СА 69', station: 'Автовокзал Тверь', fare: '55 ₽ (Пригород)' },
+        { route: '№ 43', plate: 'В 819 МН 69', station: 'Речной вокзал', fare: '20 ₽ (Пересадка)' }
+      ];
+
+      const refreshBtn = document.getElementById('refreshTicketBtn');
+      const routeEl = document.getElementById('demoRoute');
+      const plateEl = document.getElementById('demoPlate');
+      const stationEl = document.getElementById('demoStation');
+      const fareEl = document.getElementById('demoFare');
+
+      if (refreshBtn) {
+        let currentIndex = 0;
+        refreshBtn.addEventListener('click', () => {
+          currentIndex = (currentIndex + 1) % randomBuses.length;
+          const bus = randomBuses[currentIndex];
+
+          if (routeEl) routeEl.textContent = bus.route;
+          if (plateEl) plateEl.textContent = bus.plate;
+          if (stationEl) stationEl.textContent = 'Посадка: ' + bus.station;
+          if (fareEl) fareEl.textContent = bus.fare;
+
+          // Сбросим таймер на 2 часа
+          totalSeconds = 7200;
+          updateCountdown();
+
+          // Анимация эффекта нажатия
+          refreshBtn.style.transform = 'scale(0.96)';
+          setTimeout(() => {
+            refreshBtn.style.transform = '';
+          }, 150);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
