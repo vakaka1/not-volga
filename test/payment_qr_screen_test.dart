@@ -118,6 +118,56 @@ void main() {
       expect(find.byType(QrScannerOverlay), findsOneWidget);
       expect(find.byType(CustomPaint), findsWidgets);
     });
+
+    testWidgets('PaymentQrScreen does not autoStart when isActive is false',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: PaymentQrScreen(isActive: false),
+        ),
+      );
+      await tester.pump();
+
+      // UI elements still build cleanly
+      expect(find.byType(PaymentQrScreen), findsOneWidget);
+      expect(find.byType(QrScannerOverlay), findsOneWidget);
+
+      // Verify overlay has no detected barcodes
+      final overlay = tester.widget<QrScannerOverlay>(find.byType(QrScannerOverlay));
+      expect(overlay.detectedBarcodes, isEmpty);
+    });
+
+    testWidgets('Transitioning isActive resets detectedBarcodes and clears blue square',
+        (WidgetTester tester) async {
+      final isTabActive = ValueNotifier<bool>(true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ValueListenableBuilder<bool>(
+            valueListenable: isTabActive,
+            builder: (context, active, _) {
+              return PaymentQrScreen(isActive: active);
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Overlay initially empty
+      QrScannerOverlay overlay = tester.widget<QrScannerOverlay>(find.byType(QrScannerOverlay));
+      expect(overlay.detectedBarcodes, isEmpty);
+
+      // Simulate switching tabs away (isActive = false)
+      isTabActive.value = false;
+      await tester.pump();
+
+      // Simulate switching back (isActive = true)
+      isTabActive.value = true;
+      await tester.pump();
+
+      overlay = tester.widget<QrScannerOverlay>(find.byType(QrScannerOverlay));
+      expect(overlay.detectedBarcodes, isEmpty);
+    });
   });
 
   group('QrPayloadParser Tests', () {

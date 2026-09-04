@@ -51,8 +51,26 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
       facing: CameraFacing.back,
       torchEnabled: false,
       returnImage: false,
-      autoStart: true,
+      autoStart: false,
     );
+
+    if (widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.isActive) {
+          _startCamera();
+        }
+      });
+    }
+  }
+
+  void _resetScanState() {
+    if (!mounted) return;
+    setState(() {
+      _detectedBarcodes = [];
+      _captureSize = null;
+      _isProcessing = false;
+      _isErrorDialogShowing = false;
+    });
   }
 
   Future<void> _showInsufficientFundsDialog() async {
@@ -62,29 +80,31 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
     });
     HapticFeedback.heavyImpact();
     await InsufficientFundsDialog.show(context);
-    if (mounted) {
-      setState(() {
-        _isErrorDialogShowing = false;
-        _detectedBarcodes = [];
-        _isProcessing = false;
-      });
-    }
+    _resetScanState();
   }
 
   Future<void> _startCamera() async {
     try {
-      if (!_controller.value.isRunning) {
+      if (!_controller.value.isRunning && !_controller.value.isStarting) {
         await _controller.start();
+        if (!mounted || !widget.isActive) {
+          await _controller.stop();
+        }
       }
     } catch (_) {}
   }
 
   Future<void> _stopCamera() async {
     try {
-      if (_controller.value.isRunning) {
+      if (_controller.value.isRunning || _controller.value.isStarting) {
         await _controller.stop();
       }
     } catch (_) {}
+    if (mounted && _isTorchOn) {
+      setState(() {
+        _isTorchOn = false;
+      });
+    }
   }
 
   @override
@@ -92,9 +112,11 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive) {
       if (widget.isActive) {
+        _resetScanState();
         _startCamera();
       } else {
         _stopCamera();
+        _resetScanState();
       }
     }
   }
@@ -116,6 +138,7 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   }
 
   void _handleBack() {
+    _resetScanState();
     if (widget.onBack != null) {
       widget.onBack!();
     } else if (Navigator.of(context).canPop()) {
@@ -138,7 +161,7 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_isProcessing || _isErrorDialogShowing) return;
+    if (!widget.isActive || _isProcessing || _isErrorDialogShowing) return;
 
     // Минимальная проверка баланса (учитываем пересадку)
     final isTransfer = TicketService.instance.canMakeTransfer(
@@ -171,7 +194,10 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
 
     // Small delay to allow the passenger to see the vibrant yellow contour lock-on
     Future.delayed(const Duration(milliseconds: 350), () {
-      if (!mounted) return;
+      if (!mounted || !widget.isActive) {
+        _resetScanState();
+        return;
+      }
       _openPaymentSheet(data);
     });
   }
@@ -183,7 +209,10 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
       maxAttempts: 5,
     );
 
-    if (!mounted) return;
+    if (!mounted || !widget.isActive) {
+      _resetScanState();
+      return;
+    }
 
     // 1.3. Нет интернета → конструктор билета в офлайн-режиме
     if (!apiResult.isApiAvailable) {
@@ -208,6 +237,8 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
         ),
       );
 
+      _resetScanState();
+
       if (result == true) {
         if (widget.onPaymentSuccess != null) {
           widget.onPaymentSuccess!();
@@ -217,14 +248,8 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
         return;
       }
 
-      if (mounted) {
-        setState(() {
-          _detectedBarcodes = [];
-          _isProcessing = false;
-        });
-        if (widget.isActive) {
-          await _startCamera();
-        }
+      if (mounted && widget.isActive) {
+        await _startCamera();
       }
       return;
     }
@@ -265,11 +290,9 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
         ),
       );
 
-      if (mounted) {
-        setState(() {
-          _detectedBarcodes = [];
-          _isProcessing = false;
-        });
+      _resetScanState();
+      if (mounted && widget.isActive) {
+        await _startCamera();
       }
       return;
     }
@@ -293,6 +316,8 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
         ),
       );
 
+      _resetScanState();
+
       if (result == true) {
         if (widget.onPaymentSuccess != null) {
           widget.onPaymentSuccess!();
@@ -302,14 +327,8 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
         return;
       }
 
-      if (mounted) {
-        setState(() {
-          _detectedBarcodes = [];
-          _isProcessing = false;
-        });
-        if (widget.isActive) {
-          await _startCamera();
-        }
+      if (mounted && widget.isActive) {
+        await _startCamera();
       }
       return;
     }
@@ -327,6 +346,8 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
       ),
     );
 
+    _resetScanState();
+
     if (result == true) {
       if (widget.onPaymentSuccess != null) {
         widget.onPaymentSuccess!();
@@ -336,14 +357,8 @@ class _PaymentQrScreenState extends State<PaymentQrScreen>
       return;
     }
 
-    if (mounted) {
-      setState(() {
-        _detectedBarcodes = [];
-        _isProcessing = false;
-      });
-      if (widget.isActive) {
-        await _startCamera();
-      }
+    if (mounted && widget.isActive) {
+      await _startCamera();
     }
   }
 
