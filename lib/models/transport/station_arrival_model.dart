@@ -55,20 +55,26 @@ class StationArrivalModel {
     return diff < 0 ? 0 : diff;
   }
 
-  /// Строка времени первого прибытия в формате "7 мин" или "15:41"
+  /// Строка времени первого прибытия в формате "7 мин", "Прибывает" или "15:41"
   String get primaryTimeText {
     final mins = minutesToFirstArrival;
     if (mins == null) return '--';
+    if (mins <= 0) {
+      return 'Прибывает';
+    }
     if (mins <= 45) {
       return '$mins мин';
     }
     return DateFormat('HH:mm').format(estimatedArrivals.first);
   }
 
-  /// Строка времени второго прибытия в формате "15 мин" или "16:10"
+  /// Строка времени второго прибытия в формате "15 мин", "Прибывает" или "16:10"
   String? get secondaryTimeText {
     final mins = minutesToSecondArrival;
     if (mins == null) return null;
+    if (mins <= 0) {
+      return 'Прибывает';
+    }
     if (mins <= 60) {
       return '$mins мин';
     }

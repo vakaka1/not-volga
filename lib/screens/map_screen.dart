@@ -1321,7 +1321,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
             // 2. Желтый значок доступности (аккуратный 24х24, только если есть активный автобус с госномером)
             if (item.hasWheelchair && item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Container(
                 width: 24,
                 height: 24,
@@ -1336,7 +1336,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
             // 3. Плашка госномера (аккуратная 24dp, только если есть активный автобус)
             if (item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
-              const SizedBox(width: 6),
+              SizedBox(width: item.hasWheelchair ? 10 : 12),
               Container(
                 height: 24,
                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1370,7 +1370,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   style: const TextStyle(
                     fontFamily: 'NotoSans',
                     fontSize: 16.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.normal,
                     color: Color(0xFF111111),
                     height: 1.15,
                   ),
@@ -1506,7 +1506,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             onVerticalDragEnd: _handleVerticalDragEnd,
             child: Container(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -1517,7 +1517,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     fontSize: 17,
                   ),
                   if (vehicle.hasWheelchair) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Container(
                       width: 24,
                       height: 24,
@@ -1530,7 +1530,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     ),
                   ],
                   if (vehicle.formattedLicenseNumber.isNotEmpty) ...[
-                    const SizedBox(width: 6),
+                    SizedBox(width: vehicle.hasWheelchair ? 10 : 12),
                     Container(
                       height: 24,
                       padding: const EdgeInsets.symmetric(horizontal: 6),

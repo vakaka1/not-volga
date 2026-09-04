@@ -215,7 +215,7 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
 
             // 2. Желтый значок доступности (инвалидная коляска)
             if (item.hasWheelchair && item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Container(
                 width: 24,
                 height: 24,
@@ -230,7 +230,7 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
 
             // 3. Плашка госномера
             if (item.licenseNumber != null && item.licenseNumber!.isNotEmpty) ...[
-              const SizedBox(width: 6),
+              SizedBox(width: item.hasWheelchair ? 10 : 12),
               Container(
                 height: 24,
                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -264,7 +264,7 @@ class _VolgaStationBottomSheetState extends State<VolgaStationBottomSheet> {
                   style: const TextStyle(
                     fontFamily: 'NotoSans',
                     fontSize: 16.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.normal,
                     color: Color(0xFF111111),
                     height: 1.15,
                   ),

@@ -233,7 +233,7 @@ class _VolgaBusBottomSheetState extends State<VolgaBusBottomSheet> {
 
               // 1. Верхняя плашка (БЕЗ кнопки закрытия): [ 🚌 107 ] [ ♿ ] [ H 263 CP 69 ]
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 6, 18, 12),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -244,7 +244,7 @@ class _VolgaBusBottomSheetState extends State<VolgaBusBottomSheet> {
                       fontSize: 17,
                     ),
                     if (widget.vehicle.hasWheelchair) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
                       Container(
                         width: 24,
                         height: 24,
@@ -257,7 +257,7 @@ class _VolgaBusBottomSheetState extends State<VolgaBusBottomSheet> {
                       ),
                     ],
                     if (widget.vehicle.licenseNumber.isNotEmpty) ...[
-                      const SizedBox(width: 6),
+                      SizedBox(width: widget.vehicle.hasWheelchair ? 10 : 12),
                       Container(
                         height: 24,
                         padding: const EdgeInsets.symmetric(horizontal: 6),
