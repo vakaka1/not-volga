@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../constants/app_assets.dart';
 
 class VolgaRouteBadgeClipper extends CustomClipper<Path> {
   final double radius;
@@ -44,6 +45,7 @@ class VolgaRouteBadge extends StatelessWidget {
   final double width;
   final double height;
   final double fontSize;
+  final Color color;
 
   const VolgaRouteBadge({
     super.key,
@@ -51,64 +53,69 @@ class VolgaRouteBadge extends StatelessWidget {
     this.width = 76.0,
     this.height = 31.0,
     this.fontSize = 17.0,
+    this.color = const Color(0xFF0052FF),
   });
 
   @override
   Widget build(BuildContext context) {
-    const double pointWidth = 9.0;
-    const double radius = 4.5;
+    final cleanRoute = routeName.replaceAll('№', '').trim();
+    final displayRoute = cleanRoute.isNotEmpty ? cleanRoute : routeName;
 
     return SizedBox(
       width: width,
       height: height,
-      child: ClipPath(
-        clipper: const VolgaRouteBadgeClipper(radius: radius, pointWidth: pointWidth),
-        child: Container(
-          color: const Color(0xFF0052FF),
-          alignment: Alignment.center,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Крупный значок автобуса, ровно 8dp от левого края (как в оригинале)
-              Positioned(
-                left: 8.0,
-                child: Image.asset(
-                  'assets/icons/ic_routes_bus_tight.png',
-                  width: 17.0,
-                  height: 20.0,
-                  color: Colors.white,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.directions_bus,
-                    color: Colors.white,
-                    size: 20.0,
-                  ),
-                ),
-              ),
-
-              // Номер маршрута, отцентрированный в полезной области плашки
-              Positioned(
-                left: 29.0,
-                right: pointWidth + 2.0,
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      routeName,
-                      style: TextStyle(
-                        fontFamily: 'NotoSans',
-                        fontSize: fontSize,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Оригинальная плашка маршрута со сглаженными краями (assets/images/bg_bus_plate.png),
+          // окрашенная в нужный цвет через colorBlendMode
+          Positioned.fill(
+            child: Image.asset(
+              AppAssets.bgBusPlate,
+              color: color,
+              colorBlendMode: BlendMode.srcIn,
+              fit: BoxFit.fill,
+            ),
           ),
-        ),
+
+          // Значок автобуса, аккуратно спозиционированный слева (как в оригинале)
+          Positioned(
+            left: 7.0,
+            child: Image.asset(
+              'assets/icons/ic_routes_bus_tight.png',
+              width: 17.0,
+              height: 20.0,
+              color: Colors.white,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.directions_bus,
+                color: Colors.white,
+                size: 20.0,
+              ),
+            ),
+          ),
+
+          // Номер маршрута, отцентрированный в полезной области плашки
+          Positioned(
+            left: 28.0,
+            right: 12.0,
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  displayRoute,
+                  style: TextStyle(
+                    fontFamily: 'NotoSans',
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

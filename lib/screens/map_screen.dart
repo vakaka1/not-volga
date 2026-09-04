@@ -925,7 +925,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 image: iconDescriptor,
                 scale: isSelected ? 0.65 : 0.52,
                 rotationType: RotationType.noRotation, // Поворот выполнен в Canvas!
-                anchor: isSelected ? const Offset(0.35, 0.5) : const Offset(0.5, 0.5),
+                anchor: isSelected
+                    ? BusMarkerGenerator.getSelectedAnchor(vehicle.routeName)
+                    : const Offset(0.5, 0.5),
               ),
             ),
             opacity: 1.0,

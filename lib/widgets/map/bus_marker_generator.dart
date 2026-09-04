@@ -95,8 +95,8 @@ class BusMarkerGenerator {
     }
   }
 
-  static const double _busWidth = 54.0;
-  static const double _busHeight = 62.0;
+  static const double _busWidth = 46.0;
+  static const double _busHeight = 52.5;
   static const Rect _busSrc = Rect.fromLTWH(26, 23, 43, 49);
 
   static Future<BitmapDescriptor> _generateNormalMarker(int angleDeg) async {
@@ -119,8 +119,7 @@ class BusMarkerGenerator {
     canvas.drawImage(_bluePinImage!, const Offset(-48, -48), Paint());
     canvas.restore();
 
-    // 2. Белый значок автобуса ic_routes_bus.png поверх капли
-    // Обрезаем прозрачные поля (фактический автобус 43x49) и масштабируем до 54x62
+    // 2. Белый значок автобуса ic_routes_bus.png поверх капли (уменьшенный на пару пунктов)
     final Rect busDest = Rect.fromCenter(
       center: const Offset(cx, cy),
       width: _busWidth,
@@ -135,13 +134,13 @@ class BusMarkerGenerator {
   }
 
   static Future<BitmapDescriptor> _generateSelectedMarker(int angleDeg, String routeName) async {
-    // Для выбранного маркера добавляем плашку с номером маршрута справа (как на res/bus.webp)
+    // Для выбранного маркера добавляем плашку с номером маршрута справа (поверх капли)
     final textPainter = TextPainter(
       text: TextSpan(
         text: routeName,
         style: const TextStyle(
           color: Colors.black,
-          fontSize: 34,
+          fontSize: 32,
           fontWeight: FontWeight.w800,
           fontFamily: 'NotoSans',
         ),
@@ -150,20 +149,40 @@ class BusMarkerGenerator {
     )..layout();
 
     final double textWidth = textPainter.width;
-    final double badgeWidth = textWidth + 46;
     const double badgeHeight = 54.0;
-
-    final double totalWidth = 180.0 + badgeWidth;
-    const double totalHeight = 180.0;
     const double cx = 90.0;
-    const double cy = totalHeight / 2;
+    const double cy = 90.0;
+    const double totalHeight = 180.0;
+
+    // Круглая часть капли имеет радиус 48 вокруг (cx, cy). Край круга находится на x = 90 + 48 = 138.
+    // Плашка начинается на x = 126 (стыкуется с круглой частью капли).
+    // Текст начинается на x = 144, что строго за пределами синего круга.
+    const double badgeLeft = 126.0;
+    final double badgeWidth = textWidth + 36.0;
+    final double totalWidth = badgeLeft + badgeWidth + 14.0;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, totalWidth, totalHeight));
 
-    // 1. Белая плашка с номером маршрута (капсула справа от центра круга)
+    // 1. Синяя капля по направлению движения (рисуется первой!)
+    final double angleRad = (angleDeg - 180) * math.pi / 180.0;
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.rotate(angleRad);
+    canvas.drawImage(_bluePinImage!, const Offset(-48, -48), Paint());
+    canvas.restore();
+
+    // 2. Белый автобус поверх капли (уменьшенный)
+    final Rect selBusDest = Rect.fromCenter(
+      center: const Offset(cx, cy),
+      width: _busWidth,
+      height: _busHeight,
+    );
+    canvas.drawImageRect(_busIconImage!, _busSrc, selBusDest, Paint());
+
+    // 3. Белая плашка с номером маршрута ПОВЕРХ капли (чтобы ни круг капли, ни повернутый хвост не наезжали на номер!)
     final badgeRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(cx + 10, cy - badgeHeight / 2, badgeWidth, badgeHeight),
+      Rect.fromLTWH(badgeLeft, cy - badgeHeight / 2, badgeWidth, badgeHeight),
       const Radius.circular(16),
     );
     final shadowPaint = Paint()
@@ -175,30 +194,39 @@ class BusMarkerGenerator {
     canvas.drawRRect(badgeRect, badgePaint);
 
     // Отрисовка номера маршрута внутри плашки
+    final double textX = badgeLeft + 18.0;
     textPainter.paint(
       canvas,
-      Offset(cx + 34, cy - textPainter.height / 2),
+      Offset(textX, cy - textPainter.height / 2),
     );
-
-    // 2. Синяя капля по направлению движения
-    final double angleRad = (angleDeg - 180) * math.pi / 180.0;
-    canvas.save();
-    canvas.translate(cx, cy);
-    canvas.rotate(angleRad);
-    canvas.drawImage(_bluePinImage!, const Offset(-48, -48), Paint());
-    canvas.restore();
-
-    // 3. Белый автобус поверх капли (крупно и ровно!)
-    final Rect selBusDest = Rect.fromCenter(
-      center: const Offset(cx, cy),
-      width: _busWidth,
-      height: _busHeight,
-    );
-    canvas.drawImageRect(_busIconImage!, _busSrc, selBusDest, Paint());
 
     final picture = recorder.endRecording();
     final img = await picture.toImage(totalWidth.toInt(), totalHeight.toInt());
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+  }
+
+  /// Точный якорь для выбранного маркера, чтобы центр капли (cx, cy) оставался ровно на координатах автобуса
+  static Offset getSelectedAnchor(String? routeName) {
+    if (routeName == null || routeName.isEmpty) {
+      return const Offset(0.35, 0.5);
+    }
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: routeName,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 32,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'NotoSans',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    const double badgeLeft = 126.0;
+    final double badgeWidth = textPainter.width + 36.0;
+    final double totalWidth = badgeLeft + badgeWidth + 14.0;
+    return Offset(90.0 / totalWidth, 0.5);
   }
 }
